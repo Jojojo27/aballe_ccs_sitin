@@ -22,7 +22,67 @@ if (isset($_GET['reset_sessions'])) {
     exit();
 }
 
-// Handle Add Student via AJAX
+// Handle AJAX request for PC status
+if (isset($_GET['action']) && $_GET['action'] === 'get_pc_status') {
+    header('Content-Type: application/json');
+    
+    $lab = isset($_GET['lab']) ? trim($_GET['lab']) : null;
+    $date = isset($_GET['date']) ? trim($_GET['date']) : null;
+    
+    if (!$lab || !$date) {
+        echo json_encode([]);
+        exit();
+    }
+    
+    $pcStatus = [];
+    
+    // Get explicit per-PC usage records for this lab and date
+    $inUsePcNos = [];
+    try {
+        $stmt = $pdo->prepare("SELECT pc_no FROM pc_usage WHERE laboratory = ? AND date = ? AND is_active = 1");
+        $stmt->execute([$lab, $date]);
+        $inUsePcNos = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Throwable $e) {
+        $inUsePcNos = [];
+    }
+    
+    // Get PC count for this lab
+    $stmt = $pdo->prepare("SELECT pc_count FROM laboratories WHERE lab_number = ?");
+    $stmt->execute([$lab]);
+    $labConfig = $stmt->fetch();
+    $pcCount = $labConfig ? (int)$labConfig['pc_count'] : 50;
+
+    // Get maintenance PCs for this lab/date (if table exists)
+    $maintenancePcNos = [];
+    try {
+        $stmt = $pdo->prepare("SELECT pc_no FROM pc_maintenance WHERE laboratory = ? AND date = ? AND is_active = 1");
+        $stmt->execute([$lab, $date]);
+        $maintenancePcNos = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Throwable $e) {
+        $maintenancePcNos = [];
+    }
+    
+    // Generate PC status for each PC
+    for ($i = 1; $i <= $pcCount; $i++) {
+        $pcNo = str_pad($i, 2, '0', STR_PAD_LEFT);
+        
+        $status = 'Vacant';
+        
+        if (in_array($i, $maintenancePcNos, true)) {
+            $status = 'Maintenance';
+        } elseif (in_array($i, $inUsePcNos, true)) {
+            $status = 'In-Use';
+        }
+        
+        $pcStatus[] = [
+            'pcNo' => $pcNo,
+            'status' => $status
+        ];
+    }
+    
+    echo json_encode($pcStatus);
+    exit();
+}
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_student_ajax'])) {
     $id_number = trim($_POST['id_number']);
     $first_name = trim($_POST['first_name']);
@@ -133,42 +193,98 @@ if (isset($_GET['msg'])) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        html { font-size: 13px; zoom: 1; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Poppins', sans-serif; background: #f0f2f5; }
         
         .navbar {
-            background: linear-gradient(145deg, #2c3e50, #1a2634);
+            background: linear-gradient(135deg, #2c3e50, #1a2634);
             color: white;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             position: fixed;
-            width: 100%;
             top: 0;
+            left: 0;
+            bottom: 0;
+            width: 220px;
+            height: 100vh;
             z-index: 1000;
-            flex-wrap: wrap;
-            gap: 1rem;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
-        .navbar-logo { font-size: 1.3rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
-        .navbar-links { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-        .navbar-links a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            transition: 0.3s;
-            font-size: 0.9rem;
-            display: inline-flex;
+        .navbar-logo {
+            display: flex;
             align-items: center;
             gap: 0.5rem;
+            padding: 1.2rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        .navbar-links a:hover { background: #34495e; }
-        .navbar-links a.active { background: #3498db; }
-        .logout-btn { background: #e74c3c; }
+        .navbar-links {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            justify-content: space-evenly;
+        }
+        .navbar-links a {
+            color: rgba(255,255,255,0.78);
+            text-decoration: none;
+            padding: 1.2rem 1rem;
+            transition: 0.2s;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            border-left: 3px solid transparent;
+            white-space: nowrap;
+        }
+        .navbar-links a i { font-size: 0.9rem; width: 16px; text-align: center; }
+        .navbar-links a:hover { background: rgba(255,255,255,0.08); border-left-color: #3498db; color: white; }
+        .navbar-links a.active { background: rgba(52,152,219,0.2); border-left-color: #3498db; color: white; }
+        .logout-btn {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.6rem !important;
+            background: #e74c3c !important;
+            color: white !important;
+            text-decoration: none;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.8rem !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            border-left: 3px solid transparent !important;
+            white-space: nowrap;
+        }
+        .logout-btn i { font-size: 0.9rem; width: 16px; text-align: center; }
         .logout-btn:hover { background: #c0392b !important; }
+        .dark-mode-toggle {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 10001;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 0.5rem 1.1rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: 0.2s;
+        }
+        .dark-mode-toggle:hover { background: #2980b9; }
+        .dark-mode-toggle i { font-size: 0.9rem; }
+        body.dark-mode { background: #1a2332 !important; }
+        body.dark-mode .main-content { background: #1e2a38; color: #dde3ea; }
+        body.dark-mode table { background: #253040 !important; color: #dde3ea !important; }
+        body.dark-mode th { background: #1a2634 !important; color: #dde3ea !important; }
+        body.dark-mode td { border-color: #2c3e50 !important; color: #dde3ea !important; }
         
-        .main-content { margin-top: 80px; padding: 2rem; max-width: 1400px; margin-left: auto; margin-right: auto; }
+        .main-content { margin-left: 220px; padding: 2rem; min-height: 100vh; }
         .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem; }
         .btn-add { background: #27ae60; color: white; padding: 0.8rem 1.5rem; border-radius: 8px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
         .btn-reset { background: #e74c3c; color: white; padding: 0.8rem 1.5rem; border-radius: 8px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 0.5rem; }
@@ -458,22 +574,30 @@ if (isset($_GET['msg'])) {
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-logo"><i class="fas fa-laptop-code"></i> College of Computer Studies Admin</div>
-        <div class="navbar-links">
-            <a href="admin_dashboard.php"><i class="fas fa-home"></i> Home</a>
-            <a href="javascript:void(0)" onclick="openSearchModal()"><i class="fas fa-search"></i> Search</a>
-            <a href="admin_students.php" class="active"><i class="fas fa-users"></i> Students</a>
-            <a href="admin_sitins.php"><i class="fas fa-clock"></i> Sit-in</a>
-            <a href="admin_records.php"><i class="fas fa-list"></i> View Sit-in Records</a>
-            <a href="admin_reports.php"><i class="fas fa-chart-line"></i> Sit-in Reports</a>
-            <a href="admin_feedback.php"><i class="fas fa-star"></i> Feedback Reports</a>
-            <a href="admin_reservations.php"><i class="fas fa-calendar-alt"></i> Reservation</a>
-            <a href="logout.php" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Log out</a>
-        </div>
-    </nav>
+        <div class="app-wrapper">
+            <!-- Sidebar Navigation -->
+            <aside class="sidebar" style="width: 250px; background: #111827; color: #e5e7eb; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;">
+                <div>
+                    <div class="sidebar-logo" style="display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.2rem; margin-bottom: 2.5rem; padding-left: 0.5rem; padding-top: 1.5rem;">
+                        <i class="fas fa-laptop-code"></i> <span>CCS Admin</span>
+                    </div>
+                    <nav class="sidebar-nav" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <a href="admin_dashboard.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-home"></i> Home</a>
+                        <a href="admin_search.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-search"></i> Search</a>
+                        <a href="admin_students.php" class="active" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #fff; font-weight: 500; background: #3b82f6; transition: all 0.2s;"><i class="fas fa-users"></i> Students</a>
+                        <a href="admin_sitins.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-clock"></i> Sit-in</a>
+                        <a href="admin_records.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-list"></i> View Records</a>
+                        <a href="admin_reports.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-chart-line"></i> Report & Analytics</a>
+                        <a href="admin_feedback.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-comment-dots"></i> Feedback</a>
+                        <a href="admin_reservations.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-calendar-alt"></i> Reservation</a>
+                    </nav>
+                </div>
+                <div style="padding-bottom: 2rem;">
+                    <a href="logout.php" style="display: flex; align-items: center; gap: 12px; background: #dc2626; color: #fff; text-decoration: none; padding: 0.75rem 1rem; border-radius: 14px; font-weight: 600; justify-content: center;"><i class="fas fa-sign-out-alt"></i> Log out</a>
+                </div>
+            </aside>
 
-    <main class="main-content">
+            <main class="main-content" style="margin-left: 250px;">
         <div class="page-header">
             <h1><i class="fas fa-users"></i> Students Information</h1>
             <div class="button-group">
@@ -649,7 +773,7 @@ if (isset($_GET['msg'])) {
                             
                             <div class="form-group">
                                 <label>Laboratory:</label>
-                                <select name="laboratory" required>
+                                <select name="laboratory" id="sitInLaboratory" onchange="loadPCNumbers()" required>
                                     <option value="">Select Laboratory</option>
                                     <option value="523">Lab 523</option>
                                     <option value="524">Lab 524</option>
@@ -660,6 +784,14 @@ if (isset($_GET['msg'])) {
                                     <option value="529">Lab 529</option>
                                     <option value="530">Lab 530</option>
                                 </select>
+                            </div>
+                            
+                            <div class="form-group" id="pcNumberGroup" style="display: none;">
+                                <label>PC Number:</label>
+                                <select name="pc_number" id="pcNumberSelect">
+                                    <option value="">Select PC...</option>
+                                </select>
+                                <small id="pcStatusInfo" style="color: #666; margin-top: 0.3rem; display: block;"></small>
                             </div>
                             
                             <div class="form-row">
@@ -843,6 +975,73 @@ if (isset($_GET['msg'])) {
             document.getElementById('searchModal').style.display = 'none';
         }
         
+        function loadPCNumbers() {
+            const lab = document.getElementById('sitInLaboratory').value;
+            const pcGroup = document.getElementById('pcNumberGroup');
+            const pcSelect = document.getElementById('pcNumberSelect');
+            const pcStatusInfo = document.getElementById('pcStatusInfo');
+            
+            if (!lab) {
+                pcGroup.style.display = 'none';
+                return;
+            }
+            
+            // Get today's date for PC status query
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Fetch PC availability
+            fetch(`admin_students.php?action=get_pc_status&lab=${lab}&date=${today}`)
+                .then(response => response.json())
+                .then(data => {
+                    pcSelect.innerHTML = '<option value="">Select PC...</option>';
+                    
+                    if (data && data.length > 0) {
+                        data.forEach(pc => {
+                            const option = document.createElement('option');
+                            option.value = pc.pcNo;
+                            
+                            // Format the label with status
+                            if (pc.status === 'Vacant') {
+                                option.textContent = `PC ${pc.pcNo} - Vacant ✓`;
+                                option.style.color = '#27ae60';
+                            } else if (pc.status === 'In-Use') {
+                                option.textContent = `PC ${pc.pcNo} - In-Use`;
+                                option.style.color = '#e67e22';
+                            } else if (pc.status === 'Reserved') {
+                                option.textContent = `PC ${pc.pcNo} - Reserved`;
+                                option.style.color = '#3498db';
+                            } else if (pc.status === 'Pending') {
+                                option.textContent = `PC ${pc.pcNo} - Pending`;
+                                option.style.color = '#95a5a6';
+                            } else if (pc.status === 'Maintenance') {
+                                option.textContent = `PC ${pc.pcNo} - Under Maintenance`;
+                                option.style.color = '#e74c3c';
+                            }
+                            
+                            pcSelect.appendChild(option);
+                        });
+                        
+                        // Show status summary
+                        const vacant = data.filter(pc => pc.status === 'Vacant').length;
+                        const inUse = data.filter(pc => pc.status === 'In-Use').length;
+                        const reserved = data.filter(pc => pc.status === 'Reserved').length;
+                        const pending = data.filter(pc => pc.status === 'Pending').length;
+                        const maintenance = data.filter(pc => pc.status === 'Maintenance').length;
+                        
+                        pcStatusInfo.textContent = `📊 Vacant: ${vacant} | In-Use: ${inUse} | Reserved: ${reserved} | Pending: ${pending} | Maintenance: ${maintenance}`;
+                    } else {
+                        pcSelect.innerHTML = '<option value="">No PC data available</option>';
+                        pcStatusInfo.textContent = '';
+                    }
+                    
+                    pcGroup.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error loading PC numbers:', error);
+                    pcStatusInfo.textContent = 'Error loading PC availability';
+                });
+        }
+        
         function searchStudent() {
             const idNumber = document.getElementById('searchIdNumber').value.trim();
             
@@ -908,6 +1107,21 @@ if (isset($_GET['msg'])) {
                 closeSearchModal();
             }
         }
+    </script>
+    <button class="dark-mode-toggle" onclick="toggleTheme()"><i class="fas fa-moon" id="theme-icon"></i> <span id="theme-label">Dark</span></button>
+    <script>
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        document.getElementById('theme-label').textContent = isDark ? 'Light' : 'Dark';
+        document.getElementById('theme-icon').className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('theme-label').textContent = 'Light';
+        document.getElementById('theme-icon').className = 'fas fa-sun';
+    }
     </script>
 </body>
 </html>

@@ -6,26 +6,80 @@ if (!isset($_SESSION['admin_id'])) {
     exit();
 }
 
+$pcUsageTableExists = false;
+try {
+    $stmt = $pdo->prepare("SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'pc_usage'");
+    $stmt->execute();
+    $pcUsageTableExists = $stmt->rowCount() > 0;
+} catch (Throwable $e) {
+    $pcUsageTableExists = false;
+}
+
+$manualToggleFilter = $pcUsageTableExists
+    ? " AND NOT (s.purpose = 'Admin Manual PC Toggle' AND NOT EXISTS (SELECT 1 FROM pc_usage p WHERE p.sitin_id = s.id)) "
+    : " ";
+
+function isInvalidRecordTime($value) {
+    if ($value === null) {
+        return true;
+    }
+    $value = trim((string) $value);
+    return $value === '' || stripos($value, '0000-00-00') !== false;
+}
+
+function formatRecordTime($value) {
+    if (isInvalidRecordTime($value)) {
+        return 'N/A';
+    }
+    $ts = strtotime((string) $value);
+    if ($ts === false) {
+        return 'N/A';
+    }
+    return date('h:i A', $ts);
+}
+
+function formatRecordDuration($timeIn, $timeOut) {
+    if (isInvalidRecordTime($timeIn) || isInvalidRecordTime($timeOut)) {
+        return 'N/A';
+    }
+    $inTs = strtotime((string) $timeIn);
+    $outTs = strtotime((string) $timeOut);
+    if ($inTs === false || $outTs === false) {
+        return 'N/A';
+    }
+
+    $diff = $outTs - $inTs;
+    // Reject malformed legacy values that yield unrealistic durations.
+    if ($diff < 0 || $diff > 86400) {
+        return 'N/A';
+    }
+
+    $hours = floor($diff / 3600);
+    $minutes = floor(($diff % 3600) / 60);
+    return $hours . 'h ' . $minutes . 'm';
+}
+
 // Get ALL completed sit-ins (with time_out NOT NULL)
-$stmt = $pdo->query("
+$stmt = $pdo->query(" 
     SELECT s.*, u.id_number, u.first_name, u.last_name, u.profile_pic 
     FROM sit_in_history s 
     JOIN users u ON s.user_id = u.id 
     WHERE s.time_out IS NOT NULL
+    {$manualToggleFilter}
     ORDER BY s.date DESC, s.time_in DESC
 ");
 $completed_sitins = $stmt->fetchAll();
 
 // Get statistics
-$stmt = $pdo->query("SELECT COUNT(*) FROM sit_in_history WHERE time_out IS NOT NULL");
+$stmt = $pdo->query("SELECT COUNT(*) FROM sit_in_history s WHERE s.time_out IS NOT NULL {$manualToggleFilter}");
 $total_completed = $stmt->fetchColumn();
 
-$stmt = $pdo->query("SELECT COUNT(DISTINCT user_id) FROM sit_in_history WHERE time_out IS NOT NULL");
+$stmt = $pdo->query("SELECT COUNT(DISTINCT s.user_id) FROM sit_in_history s WHERE s.time_out IS NOT NULL {$manualToggleFilter}");
 $total_students = $stmt->fetchColumn();
 
 // Get today's completed
 $today = date('Y-m-d');
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM sit_in_history WHERE date = ? AND time_out IS NOT NULL");
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM sit_in_history s WHERE s.date = ? AND s.time_out IS NOT NULL {$manualToggleFilter}");
 $stmt->execute([$today]);
 $today_completed = $stmt->fetchColumn();
 ?>
@@ -38,43 +92,99 @@ $today_completed = $stmt->fetchColumn();
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        html { font-size: 13px; zoom: 1; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Poppins', sans-serif; background: #f0f2f5; }
         
         /* Navbar Styles - Your Exact Style */
         .navbar {
-            background: linear-gradient(145deg, #2c3e50, #1a2634);
+            background: linear-gradient(135deg, #2c3e50, #1a2634);
             color: white;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             position: fixed;
-            width: 100%;
             top: 0;
+            left: 0;
+            bottom: 0;
+            width: 220px;
+            height: 100vh;
             z-index: 1000;
-            flex-wrap: wrap;
-            gap: 1rem;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
-        .navbar-logo { font-size: 1.3rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
-        .navbar-links { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-        .navbar-links a {
-            color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            transition: 0.3s;
-            font-size: 0.9rem;
-            display: inline-flex;
+        .navbar-logo {
+            display: flex;
             align-items: center;
             gap: 0.5rem;
+            padding: 1.2rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        .navbar-links a:hover { background: #34495e; }
-        .navbar-links a.active { background: #3498db; }
-        .logout-btn { background: #e74c3c; }
+        .navbar-links {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            justify-content: space-evenly;
+        }
+        .navbar-links a {
+            color: rgba(255,255,255,0.78);
+            text-decoration: none;
+            padding: 1.2rem 1rem;
+            transition: 0.2s;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            border-left: 3px solid transparent;
+            white-space: nowrap;
+        }
+        .navbar-links a i { font-size: 0.9rem; width: 16px; text-align: center; }
+        .navbar-links a:hover { background: rgba(255,255,255,0.08); border-left-color: #3498db; color: white; }
+        .navbar-links a.active { background: rgba(52,152,219,0.2); border-left-color: #3498db; color: white; }
+        .logout-btn {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.6rem !important;
+            background: #e74c3c !important;
+            color: white !important;
+            text-decoration: none;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.8rem !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            border-left: 3px solid transparent !important;
+            white-space: nowrap;
+        }
+        .logout-btn i { font-size: 0.9rem; width: 16px; text-align: center; }
         .logout-btn:hover { background: #c0392b !important; }
+        .dark-mode-toggle {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 10001;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 0.5rem 1.1rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: 0.2s;
+        }
+        .dark-mode-toggle:hover { background: #2980b9; }
+        .dark-mode-toggle i { font-size: 0.9rem; }
+        body.dark-mode { background: #1a2332 !important; }
+        body.dark-mode .main-content { background: #1e2a38; color: #dde3ea; }
+        body.dark-mode table { background: #253040 !important; color: #dde3ea !important; }
+        body.dark-mode th { background: #1a2634 !important; color: #dde3ea !important; }
+        body.dark-mode td { border-color: #2c3e50 !important; color: #dde3ea !important; }
         
-        .main-content { margin-top: 90px; padding: 2rem; max-width: 1400px; margin-left: auto; margin-right: auto; }
+        .main-content { margin-left: 220px; padding: 2rem; min-height: 100vh; }
         
         .page-header { margin-bottom: 2rem; }
         .page-header h1 { font-size: 1.8rem; color: #2c3e50; display: flex; align-items: center; gap: 0.8rem; }
@@ -241,24 +351,30 @@ $today_completed = $stmt->fetchColumn();
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-logo">
-            <i class="fas fa-laptop-code"></i> College of Computer Studies Admin
-        </div>
-        <div class="navbar-links">
-            <a href="admin_dashboard.php"><i class="fas fa-home"></i> Home</a>
-            <a href="javascript:void(0)" onclick="openSearchModal()"><i class="fas fa-search"></i> Search</a>
-            <a href="admin_students.php"><i class="fas fa-users"></i> Students</a>
-            <a href="admin_sitins.php"><i class="fas fa-clock"></i> Sit-in</a>
-            <a href="admin_records.php" class="active"><i class="fas fa-list"></i> View Sit-in Records</a>
-            <a href="admin_reports.php"><i class="fas fa-chart-line"></i> Sit-in Reports</a>
-            <a href="admin_feedback.php"><i class="fas fa-star"></i> Feedback Reports</a>
-            <a href="admin_reservations.php"><i class="fas fa-calendar-alt"></i> Reservation</a>
-            <a href="logout.php" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Log out</a>
-        </div>
-    </nav>
+        <div class="app-wrapper">
+            <!-- Sidebar Navigation -->
+            <aside class="sidebar" style="width: 250px; background: #111827; color: #e5e7eb; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;">
+                <div>
+                    <div class="sidebar-logo" style="display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.2rem; margin-bottom: 2.5rem; padding-left: 0.5rem; padding-top: 1.5rem;">
+                        <i class="fas fa-laptop-code"></i> <span>CCS Admin</span>
+                    </div>
+                    <nav class="sidebar-nav" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                        <a href="admin_dashboard.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-home"></i> Home</a>
+                        <a href="admin_search.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-search"></i> Search</a>
+                        <a href="admin_students.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-users"></i> Students</a>
+                        <a href="admin_sitins.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-clock"></i> Sit-in</a>
+                        <a href="admin_records.php" class="active" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #fff; font-weight: 500; background: #3b82f6; transition: all 0.2s;"><i class="fas fa-list"></i> View Records</a>
+                        <a href="admin_reports.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-chart-line"></i> Report & Analytics</a>
+                        <a href="admin_feedback.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-comment-dots"></i> Feedback</a>
+                        <a href="admin_reservations.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-calendar-alt"></i> Reservation</a>
+                    </nav>
+                </div>
+                <div style="padding-bottom: 2rem;">
+                    <a href="logout.php" style="display: flex; align-items: center; gap: 12px; background: #dc2626; color: #fff; text-decoration: none; padding: 0.75rem 1rem; border-radius: 14px; font-weight: 600; justify-content: center;"><i class="fas fa-sign-out-alt"></i> Log out</a>
+                </div>
+            </aside>
 
-    <main class="main-content">
+            <main class="main-content" style="margin-left: 250px;">
         <div class="page-header">
             <h1><i class="fas fa-list"></i> View Sit-in Records</h1>
         </div>
@@ -314,7 +430,7 @@ $today_completed = $stmt->fetchColumn();
             <table id="recordsTable">
                 <thead>
                     <tr>
-                        <th>Sit ID</th>
+                        <th>PC Number</th>
                         <th>ID Number</th>
                         <th>Student</th>
                         <th>Purpose</th>
@@ -337,13 +453,7 @@ $today_completed = $stmt->fetchColumn();
                         </tr>
                     <?php else: ?>
                         <?php foreach($completed_sitins as $sit): 
-                            $duration = '';
-                            if ($sit['time_in'] && $sit['time_out']) {
-                                $diff = strtotime($sit['time_out']) - strtotime($sit['time_in']);
-                                $hours = floor($diff / 3600);
-                                $minutes = floor(($diff % 3600) / 60);
-                                $duration = $hours . 'h ' . $minutes . 'm';
-                            }
+                            $duration = formatRecordDuration($sit['time_in'], $sit['time_out']);
                         ?>
                         <tr>
                             <td>#<?php echo $sit['id']; ?></td>
@@ -357,8 +467,8 @@ $today_completed = $stmt->fetchColumn();
                             <td><?php echo htmlspecialchars($sit['purpose']); ?></td>
                             <td>Lab <?php echo htmlspecialchars($sit['laboratory']); ?></td>
                             <td><?php echo date('M d, Y', strtotime($sit['date'])); ?></td>
-                            <td><?php echo date('h:i A', strtotime($sit['time_in'])); ?></td>
-                            <td><?php echo date('h:i A', strtotime($sit['time_out'])); ?></td>
+                            <td><?php echo formatRecordTime($sit['time_in']); ?></td>
+                            <td><?php echo formatRecordTime($sit['time_out']); ?></td>
                             <td><?php echo $duration; ?></td>
                             <td><span class="status-badge status-completed">Completed</span></td>
                         </tr>
@@ -393,6 +503,21 @@ $today_completed = $stmt->fetchColumn();
         
         document.getElementById('searchInput').addEventListener('keyup', filterTable);
         document.getElementById('labFilter').addEventListener('change', filterTable);
+    </script>
+    <button class="dark-mode-toggle" onclick="toggleTheme()"><i class="fas fa-moon" id="theme-icon"></i> <span id="theme-label">Dark</span></button>
+    <script>
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        document.getElementById('theme-label').textContent = isDark ? 'Light' : 'Dark';
+        document.getElementById('theme-icon').className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('theme-label').textContent = 'Light';
+        document.getElementById('theme-icon').className = 'fas fa-sun';
+    }
     </script>
 </body>
 </html>

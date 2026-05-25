@@ -10,6 +10,7 @@ session_start();
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <style>
+    html { font-size: 13px; zoom: 0.80; }
 * {
     margin: 0;
     padding: 0;

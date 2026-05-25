@@ -24,9 +24,19 @@ if (!isset($current_page)) $current_page = '';
                 <i class="fas fa-users"></i> Students
             </a>
 
-            <a href="admin_sitins.php" class="<?php echo $current_page=='sitins'?'active':''; ?>">
-                <i class="fas fa-history"></i> Sit-ins
-            </a>
+            <div class="nav-dropdown">
+                <a href="#" class="<?php echo ($current_page=='sitins' || $current_page=='sit_records')?'active':''; ?>">
+                    <i class="fas fa-history"></i> Sit-in <i class="fas fa-caret-down"></i>
+                </a>
+                <div class="nav-dropdown-content">
+                    <a href="admin_sitins.php" class="<?php echo $current_page=='sitins'?'active':''; ?>">
+                        <i class="fas fa-desktop"></i> Current Sit-in
+                    </a>
+                    <a href="admin_records.php" class="<?php echo $current_page=='sit_records'?'active':''; ?>">
+                        <i class="fas fa-file-alt"></i> Sit-in Records
+                    </a>
+                </div>
+            </div>
 
             <a href="admin_reservations.php" class="<?php echo $current_page=='reservations'?'active':''; ?>">
                 <i class="fas fa-calendar-alt"></i> Reservations

@@ -1,0 +1,232 @@
+:root {
+    --bg: #f0f2f5;
+    --surface: #ffffff;
+    --surface-soft: #f8faff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #dbe4ff;
+    --nav: #1f3650;
+    --nav-hover: #34495e;
+    --input-bg: #ffffff;
+    --shadow: 0 4px 15px rgba(0, 0, 0, 0.10);
+}
+
+[data-theme="dark"] {
+    --bg: #111827;
+    --surface: #1f2937;
+    --surface-soft: #273449;
+    --text: #f3f4f6;
+    --muted: #9ca3af;
+    --border: #374151;
+    --nav: #0f172a;
+    --nav-hover: #1e293b;
+    --input-bg: #111827;
+    --shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+body {
+    background: var(--bg) !important;
+    color: var(--text);
+}
+
+h1, h2, h3, h4, h5, h6,
+p,
+span,
+label,
+small,
+th,
+td,
+a,
+li,
+strong,
+em {
+    color: inherit;
+}
+
+.navbar,
+.admin-nav {
+    background: linear-gradient(145deg, var(--nav), #1a2634) !important;
+}
+
+.navbar-links a:hover,
+.nav-links a:hover {
+    background: var(--nav-hover) !important;
+}
+
+.card,
+.table-container,
+.filters,
+.stat-card,
+.modal-content,
+.reservation-list-card,
+.reservation-form-card,
+.student-info,
+.notification-dropdown,
+.announcement-item,
+.pc-grid-container,
+.reservation-empty,
+.empty-state,
+.feedback-item,
+.container,
+.main-content,
+.content-wrap {
+    background: var(--surface) !important;
+    color: var(--text) !important;
+    box-shadow: var(--shadow);
+}
+
+input,
+select,
+textarea,
+.form-control,
+.form-group input,
+.form-group select {
+    background: var(--input-bg) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+}
+
+table th {
+    background: #2c3e50 !important;
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] table th {
+    background: #0f172a !important;
+}
+
+table td,
+tr,
+tbody,
+thead,
+.table,
+.reservation-table td,
+.reservation-table th {
+    border-color: var(--border) !important;
+    color: var(--text) !important;
+}
+
+[data-theme="dark"] tr:hover td,
+[data-theme="dark"] tr:hover {
+    background: #1f2b3e !important;
+}
+
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6,
+[data-theme="dark"] p,
+[data-theme="dark"] span,
+[data-theme="dark"] label,
+[data-theme="dark"] small,
+[data-theme="dark"] li,
+[data-theme="dark"] th,
+[data-theme="dark"] td,
+[data-theme="dark"] a,
+[data-theme="dark"] strong,
+[data-theme="dark"] em,
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .stat-value,
+[data-theme="dark"] .announcement-date,
+[data-theme="dark"] .announcement-message,
+[data-theme="dark"] .student-name,
+[data-theme="dark"] .student-meta,
+[data-theme="dark"] .feedback-text,
+[data-theme="dark"] .record-count,
+[data-theme="dark"] .date-cell,
+[data-theme="dark"] .legend-item,
+[data-theme="dark"] .no-data,
+[data-theme="dark"] .empty-state {
+    color: #ffffff !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+    color: #e5e7eb !important;
+    opacity: 1;
+}
+
+/* Keep readable text on light status/PC badges while dark mode is active. */
+[data-theme="dark"] .pc-item.vacant,
+[data-theme="dark"] .pc-item.vacant *,
+[data-theme="dark"] .status-approved,
+[data-theme="dark"] .status-approved * {
+    color: #14532d !important;
+}
+
+[data-theme="dark"] .pc-item.in-use,
+[data-theme="dark"] .pc-item.in-use *,
+[data-theme="dark"] .status-pending,
+[data-theme="dark"] .status-pending * {
+    color: #713f12 !important;
+}
+
+[data-theme="dark"] .pc-item.reserved,
+[data-theme="dark"] .pc-item.reserved *,
+[data-theme="dark"] .status-disapproved,
+[data-theme="dark"] .status-disapproved * {
+    color: #7f1d1d !important;
+}
+
+[data-theme="dark"] .pc-item.pending,
+[data-theme="dark"] .pc-item.pending *,
+[data-theme="dark"] .status-cancelled,
+[data-theme="dark"] .status-cancelled * {
+    color: #1f2937 !important;
+}
+
+[data-theme="dark"] .status-completed,
+[data-theme="dark"] .status-completed *,
+[data-theme="dark"] .status-badge.completed,
+[data-theme="dark"] .status-badge.completed *,
+[data-theme="dark"] .badge-completed,
+[data-theme="dark"] .badge-completed * {
+    color: #14532d !important;
+}
+
+/* Improve visibility of PC symbols on light PC cards in dark mode. */
+[data-theme="dark"] .pc-grid-item .fa-desktop,
+[data-theme="dark"] .pc-grid-item .fa-computer,
+[data-theme="dark"] .pc-grid-item .fa-laptop {
+    color: #0f172a !important;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.theme-toggle-btn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 10001;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: #3498db;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.2);
+}
+
+.theme-toggle-btn:hover {
+    filter: brightness(0.95);
+}
+
+[data-theme="dark"] .theme-toggle-btn {
+    background: #f59e0b;
+    color: #111827;
+}
+
+@media (max-width: 768px) {
+    .theme-toggle-btn {
+        right: 10px;
+        bottom: 10px;
+        padding: 9px 12px;
+        font-size: 0.78rem;
+    }
+}

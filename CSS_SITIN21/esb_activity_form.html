@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESB Activity Form - CCS Sit-in Monitoring System</title>
+  <style>
+    :root {
+      --pad-bg: #fff4a8;
+      --pad-border: #d4bf52;
+      --ink: #2b2b2b;
+      --accent: #b58900;
+      --field-bg: #fffdf2;
+      --line: rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f5f5f5 0%, #ececec 100%);
+      padding: 24px;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--pad-bg) 0,
+        var(--pad-bg) 34px,
+        rgba(0, 0, 0, 0.04) 34px,
+        rgba(0, 0, 0, 0.04) 35px
+      );
+      border: 2px solid var(--pad-border);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+      padding: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      text-align: center;
+      font-size: 32px;
+    }
+
+    .subtitle {
+      text-align: center;
+      margin: 0 0 24px;
+      font-weight: 700;
+      color: #7b5c00;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .toolbar button {
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .toolbar button.secondary {
+      background: #5d6773;
+    }
+
+    .diagram-board {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .diagram-card {
+      background: rgba(255, 255, 255, 0.52);
+      border: 1px solid rgba(181, 137, 0, 0.35);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    }
+
+    .diagram-card h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+    }
+
+    .diagram-card p {
+      margin: 10px 0 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .diagram-svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: rgba(255, 253, 242, 0.85);
+      border-radius: 10px;
+    }
+
+    .diagram-caption {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #5d5300;
+      font-weight: 700;
+    }
+
+    .diagram-wide {
+      grid-column: 1 / -1;
+    }
+
+    .question {
+      margin-bottom: 20px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.4);
+      border-left: 6px solid var(--accent);
+      border-radius: 8px;
+    }
+
+    .compare-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(181, 137, 0, 0.4);
+      border-radius: 10px;
+      background: #fffef1;
+    }
+
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+    }
+
+    .compare-table th,
+    .compare-table td {
+      border: 1px solid #ceb85d;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .compare-table th {
+      background: #f0d46a;
+      color: #2f2a00;
+      font-weight: 700;
+    }
+
+    .compare-table td:first-child {
+      font-weight: 700;
+      background: #fff7cd;
+      width: 25%;
+    }
+
+    .table-conclusion {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #fff2b7;
+      border: 1px dashed #b58900;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 10px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    textarea,
+    input[type="text"] {
+      width: 100%;
+      border: 1px solid #b9aa54;
+      border-radius: 8px;
+      background: var(--field-bg);
+      padding: 12px;
+      font: inherit;
+      line-height: 1.6;
+    }
+
+    textarea {
+      min-height: 170px;
+      resize: vertical;
+    }
+
+    .short {
+      min-height: 120px;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .status {
+      position: sticky;
+      bottom: 14px;
+      margin-top: 24px;
+      background: rgba(43, 43, 43, 0.9);
+      color: #fff;
+      padding: 12px 14px;
+      border-radius: 8px;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+    }
+
+    .status.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 768px) {
+      body {
+        padding: 12px;
+      }
+
+      .page {
+        padding: 16px;
+      }
+
+      .meta {
+        grid-template-columns: 1fr;
+      }
+
+      .diagram-board {
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+
+      .page {
+        box-shadow: none;
+        border: 0;
+        border-radius: 0;
+      }
+
+      .toolbar,
+      .status {
+        display: none;
+      }
+
+      textarea,
+      input[type="text"] {
+        border: 0;
+        padding: 0;
+        background: transparent;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>ESB Written Activity Form</h1>
+    <p class="subtitle">Based on the CCS Sit-in Monitoring System</p>
+
+    <div class="toolbar">
+      <button type="button" id="fillAnswersBtn">Fill With Answers</button>
+      <button type="button" class="secondary" id="clearBtn">Clear Form</button>
+      <button type="button" class="secondary" id="printBtn">Print</button>
+    </div>
+
+    <section class="diagram-board">
+      <div class="diagram-card">
+        <h2>System Architecture Drawing</h2>
+        <svg class="diagram-svg" viewBox="0 0 520 300" aria-label="System architecture drawing">
+          <defs>
+            <marker id="arrowA" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#7b5c00"></path>
+            </marker>
+          </defs>
+          <rect x="25" y="30" width="140" height="48" rx="8" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="95" y="59" text-anchor="middle" font-size="15" font-weight="700">Student App</text>
+          <rect x="25" y="102" width="140" height="48" rx="8" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="95" y="131" text-anchor="middle" font-size="15" font-weight="700">Admin App</text>
+          <rect x="25" y="174" width="140" height="48" rx="8" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="95" y="203" text-anchor="middle" font-size="15" font-weight="700">PC Control</text>
+          <rect x="25" y="246" width="140" height="48" rx="8" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="95" y="275" text-anchor="middle" font-size="15" font-weight="700">Reports</text>
+
+          <rect x="205" y="98" width="110" height="120" rx="12" fill="#ffe28a" stroke="#b58900" stroke-width="3"></rect>
+          <text x="260" y="150" text-anchor="middle" font-size="24" font-weight="700">ESB</text>
+          <text x="260" y="176" text-anchor="middle" font-size="13">Routing</text>
+          <text x="260" y="194" text-anchor="middle" font-size="13">Transform</text>
+
+          <rect x="360" y="66" width="135" height="58" rx="8" fill="#dff7dc" stroke="#469449" stroke-width="2"></rect>
+          <text x="427" y="92" text-anchor="middle" font-size="15" font-weight="700">Notifications</text>
+          <text x="427" y="110" text-anchor="middle" font-size="12">Approval / Alert</text>
+          <rect x="360" y="172" width="135" height="58" rx="8" fill="#f8e2dd" stroke="#c76a4f" stroke-width="2"></rect>
+          <text x="427" y="198" text-anchor="middle" font-size="15" font-weight="700">Database</text>
+          <text x="427" y="216" text-anchor="middle" font-size="12">Reservations / Logs</text>
+
+          <line x1="165" y1="54" x2="205" y2="120" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowA)"></line>
+          <line x1="165" y1="126" x2="205" y2="146" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowA)"></line>
+          <line x1="165" y1="198" x2="205" y2="170" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowA)"></line>
+          <line x1="165" y1="270" x2="205" y2="196" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowA)"></line>
+          <line x1="315" y1="138" x2="360" y2="95" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowA)"></line>
+          <line x1="315" y1="180" x2="360" y2="201" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowA)"></line>
+        </svg>
+        <div class="diagram-caption">Q1: Four or more applications connect through the ESB as the integration hub.</div>
+      </div>
+
+      <div class="diagram-card">
+        <h2>Message Flow Drawing</h2>
+        <svg class="diagram-svg" viewBox="0 0 520 300" aria-label="Message flow drawing">
+          <defs>
+            <marker id="arrowB" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#7b5c00"></path>
+            </marker>
+          </defs>
+          <rect x="24" y="126" width="90" height="48" rx="8" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="69" y="155" text-anchor="middle" font-size="14" font-weight="700">Student</text>
+
+          <rect x="160" y="126" width="90" height="48" rx="8" fill="#ffe28a" stroke="#b58900" stroke-width="2"></rect>
+          <text x="205" y="155" text-anchor="middle" font-size="14" font-weight="700">ESB</text>
+
+          <rect x="295" y="40" width="180" height="42" rx="8" fill="#eef7d3" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="385" y="66" text-anchor="middle" font-size="13" font-weight="700">1. Validation Service</text>
+          <rect x="295" y="96" width="180" height="42" rx="8" fill="#eef7d3" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="385" y="122" text-anchor="middle" font-size="13" font-weight="700">2. Transformer</text>
+          <rect x="295" y="152" width="180" height="42" rx="8" fill="#eef7d3" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="385" y="178" text-anchor="middle" font-size="13" font-weight="700">3. Orchestration</text>
+          <rect x="295" y="208" width="180" height="42" rx="8" fill="#eef7d3" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="385" y="234" text-anchor="middle" font-size="13" font-weight="700">4. Notification + Save</text>
+
+          <line x1="114" y1="150" x2="160" y2="150" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowB)"></line>
+          <line x1="250" y1="136" x2="295" y2="61" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowB)"></line>
+          <line x1="250" y1="145" x2="295" y2="117" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowB)"></line>
+          <line x1="250" y1="155" x2="295" y2="173" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowB)"></line>
+          <line x1="250" y1="165" x2="295" y2="229" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowB)"></line>
+          <text x="44" y="112" font-size="12" font-weight="700">Reservation Request</text>
+        </svg>
+        <div class="diagram-caption">Q4: Routing, transformation, orchestration, and notification happen through the ESB.</div>
+      </div>
+
+      <div class="diagram-card diagram-wide">
+        <h2>ESB Core Components Drawing</h2>
+        <svg class="diagram-svg" viewBox="0 0 1040 240" aria-label="ESB components drawing">
+          <defs>
+            <marker id="arrowC" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#7b5c00"></path>
+            </marker>
+          </defs>
+          <rect x="24" y="82" width="160" height="76" rx="10" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="104" y="117" text-anchor="middle" font-size="22" font-weight="700">Adapter</text>
+          <text x="104" y="140" text-anchor="middle" font-size="13">Connects apps</text>
+
+          <rect x="234" y="82" width="160" height="76" rx="10" fill="#fce7a1" stroke="#b58900" stroke-width="2"></rect>
+          <text x="314" y="117" text-anchor="middle" font-size="22" font-weight="700">Router</text>
+          <text x="314" y="140" text-anchor="middle" font-size="13">Decides path</text>
+
+          <rect x="444" y="82" width="160" height="76" rx="10" fill="#e2f2d0" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="524" y="117" text-anchor="middle" font-size="22" font-weight="700">Transformer</text>
+          <text x="524" y="140" text-anchor="middle" font-size="13">Changes format</text>
+
+          <rect x="654" y="82" width="160" height="76" rx="10" fill="#f7d7d1" stroke="#c76a4f" stroke-width="2"></rect>
+          <text x="734" y="117" text-anchor="middle" font-size="22" font-weight="700">Broker</text>
+          <text x="734" y="140" text-anchor="middle" font-size="13">Delivers message</text>
+
+          <rect x="864" y="82" width="152" height="76" rx="10" fill="#dddafc" stroke="#6c63b8" stroke-width="2"></rect>
+          <text x="940" y="117" text-anchor="middle" font-size="20" font-weight="700">Services</text>
+          <text x="940" y="140" text-anchor="middle" font-size="13">DB / Notify / Reports</text>
+
+          <line x1="184" y1="120" x2="234" y2="120" stroke="#7b5c00" stroke-width="4" marker-end="url(#arrowC)"></line>
+          <line x1="394" y1="120" x2="444" y2="120" stroke="#7b5c00" stroke-width="4" marker-end="url(#arrowC)"></line>
+          <line x1="604" y1="120" x2="654" y2="120" stroke="#7b5c00" stroke-width="4" marker-end="url(#arrowC)"></line>
+          <line x1="814" y1="120" x2="864" y2="120" stroke="#7b5c00" stroke-width="4" marker-end="url(#arrowC)"></line>
+        </svg>
+        <div class="diagram-caption">Q10: Adapter, router, transformer, and broker working together inside the ESB flow.</div>
+      </div>
+
+      <div class="diagram-card diagram-wide">
+        <h2>Asynchronous Queue Drawing</h2>
+        <svg class="diagram-svg" viewBox="0 0 1040 240" aria-label="Asynchronous queue drawing">
+          <defs>
+            <marker id="arrowD" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+              <path d="M0,0 L0,6 L9,3 z" fill="#7b5c00"></path>
+            </marker>
+          </defs>
+          <rect x="30" y="88" width="170" height="64" rx="10" fill="#d8ecff" stroke="#3c7db6" stroke-width="2"></rect>
+          <text x="115" y="116" text-anchor="middle" font-size="20" font-weight="700">Reservation App</text>
+          <text x="115" y="137" text-anchor="middle" font-size="13">Saves request fast</text>
+
+          <rect x="255" y="78" width="190" height="84" rx="10" fill="#fce7a1" stroke="#b58900" stroke-width="2"></rect>
+          <text x="350" y="108" text-anchor="middle" font-size="22" font-weight="700">Message Queue</text>
+          <text x="350" y="132" text-anchor="middle" font-size="13">Notification</text>
+          <text x="350" y="150" text-anchor="middle" font-size="13">Analytics</text>
+
+          <rect x="520" y="30" width="185" height="52" rx="8" fill="#e2f2d0" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="612" y="61" text-anchor="middle" font-size="16" font-weight="700">Admin Notify Worker</text>
+          <rect x="520" y="94" width="185" height="52" rx="8" fill="#e2f2d0" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="612" y="125" text-anchor="middle" font-size="16" font-weight="700">Student Notify Worker</text>
+          <rect x="520" y="158" width="185" height="52" rx="8" fill="#e2f2d0" stroke="#6b8e23" stroke-width="2"></rect>
+          <text x="612" y="189" text-anchor="middle" font-size="16" font-weight="700">Analytics Worker</text>
+
+          <rect x="790" y="78" width="210" height="84" rx="10" fill="#dddafc" stroke="#6c63b8" stroke-width="2"></rect>
+          <text x="895" y="109" text-anchor="middle" font-size="21" font-weight="700">Background Services</text>
+          <text x="895" y="133" text-anchor="middle" font-size="13">Run independently</text>
+          <text x="895" y="151" text-anchor="middle" font-size="13">without blocking user</text>
+
+          <line x1="200" y1="120" x2="255" y2="120" stroke="#7b5c00" stroke-width="4" marker-end="url(#arrowD)"></line>
+          <line x1="445" y1="120" x2="520" y2="56" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowD)"></line>
+          <line x1="445" y1="120" x2="520" y2="120" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowD)"></line>
+          <line x1="445" y1="120" x2="520" y2="184" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowD)"></line>
+          <line x1="705" y1="56" x2="790" y2="95" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowD)"></line>
+          <line x1="705" y1="120" x2="790" y2="120" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowD)"></line>
+          <line x1="705" y1="184" x2="790" y2="145" stroke="#7b5c00" stroke-width="3" marker-end="url(#arrowD)"></line>
+        </svg>
+        <div class="diagram-caption">Q11: Queue-based async processing keeps the reservation page responsive.</div>
+      </div>
+    </section>
+
+    <form id="activityForm">
+      <div class="meta">
+        <div class="question">
+          <label for="studentName">Student Name</label>
+          <input type="text" id="studentName" name="studentName" placeholder="Enter your name">
+        </div>
+        <div class="question">
+          <label for="courseSection">Course / Section</label>
+          <input type="text" id="courseSection" name="courseSection" placeholder="Enter your course and section">
+        </div>
+      </div>
+
+      <div class="question">
+        <label for="q1">1. Draw and explain your own system architecture where at least 4 applications are integrated using ESB. Justify why each connection is necessary.</label>
+        <textarea id="q1" name="q1"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q2">2. Analyze an existing system you are familiar with and explain how integration is currently handled. Propose how ESB could improve it.</label>
+        <textarea id="q2" name="q2"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q3">3. Create a comparison table between ESB and microservices based on a specific scenario. Conclude which is better and defend your answer.</label>
+        <div class="compare-table-wrap">
+          <table class="compare-table" aria-label="ESB versus Microservices comparison table">
+            <thead>
+              <tr>
+                <th>Criteria</th>
+                <th>ESB</th>
+                <th>Microservices</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Integration Style</td>
+                <td>Central integration hub for routing and orchestration.</td>
+                <td>Distributed service-to-service integration.</td>
+              </tr>
+              <tr>
+                <td>Routing and Control</td>
+                <td>Centralized, easier to manage in one place.</td>
+                <td>Spread across many services and APIs.</td>
+              </tr>
+              <tr>
+                <td>Deployment Complexity</td>
+                <td>Lower for existing school systems.</td>
+                <td>Higher due to many independently deployed services.</td>
+              </tr>
+              <tr>
+                <td>Scalability</td>
+                <td>Moderate, may bottleneck at the bus in heavy load.</td>
+                <td>High, each service scales independently.</td>
+              </tr>
+              <tr>
+                <td>Monitoring</td>
+                <td>Easier troubleshooting from one integration point.</td>
+                <td>Needs distributed tracing and more observability tools.</td>
+              </tr>
+              <tr>
+                <td>Best Fit for Scenario</td>
+                <td>Strong fit for school sit-in and lab systems.</td>
+                <td>Better for very large, fast-growing platforms.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-conclusion"><strong>Conclusion:</strong> ESB is better for this school scenario because it is simpler to operate and keeps modules coordinated. Microservices become better when the platform grows into a much larger, high-traffic environment.</div>
+      </div>
+
+      <div class="question">
+        <label for="q4">4. Design a message flow diagram showing how a customer order travels through an ESB, including routing, transformation, and orchestration steps.</label>
+        <textarea id="q4" name="q4"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q5">5. Develop your own rule-based routing scenario and explain how ESB will process it step by step.</label>
+        <textarea id="q5" name="q5"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q6">6. Provide a real-world example of data transformation and explain why it is necessary. Include sample data before and after transformation.</label>
+        <textarea id="q6" name="q6"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q7">7. Create a workflow that uses service orchestration and explain each stage of execution.</label>
+        <textarea id="q7" name="q7"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q8">8. Identify a real-world failure scenario and explain how ESB error handling would resolve it.</label>
+        <textarea id="q8" name="q8"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q9">9. Design a secure ESB communication model, specifying authentication, authorization, and encryption.</label>
+        <textarea id="q9" name="q9"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q10">10. Draw and label the core ESB components and explain how they interact in your own designed system.</label>
+        <textarea id="q10" name="q10"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q11">11. Create a use-case scenario involving asynchronous messaging and explain why message queues are more effective than direct communication.</label>
+        <textarea id="q11" name="q11"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q12">12. Select one integration framework and propose how you would implement it in a real project.</label>
+        <textarea id="q12" name="q12"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q13">13. Propose a deployment strategy for a given system and justify your choice based on scalability and performance needs.</label>
+        <textarea id="q13" name="q13" class="short"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q14">14. Critically evaluate the limitations of ESB by describing a scenario where ESB may not be the best solution and suggesting an alternative approach.</label>
+        <textarea id="q14" name="q14"></textarea>
+      </div>
+
+      <div class="question">
+        <label for="q15">15. Reflect on the statement: “Integration is not about connecting systems, it’s about enabling them to work as one.”</label>
+        <textarea id="q15" name="q15"></textarea>
+      </div>
+    </form>
+
+    <div class="status" id="statusMessage">Ready</div>
+  </div>
+
+  <script>
+    const answerData = {
+      q1: `My system architecture has a Student Reservation App, Admin Dashboard, PC Control App, Notification Service, and Reports Module connected through an ESB. The ESB links them to one database and coordinates data exchange. This connection is necessary so reservation updates, PC status, notifications, and reports stay consistent. It also prevents each app from directly depending on every other app.`,
+      q2: `An existing system I know is CCBoot, which is already used in many computer shops and school laboratories. It integrates client PCs, server control, user monitoring, and session management through one centralized platform. This works well, but adding more external services can make integration harder to manage. ESB could improve it by centralizing routing, validation, notifications, and reporting across connected modules.` ,
+      q3: `Scenario: School Sit-in and Lab Management System\n\n| Criteria | ESB | Microservices |\n|---|---|---|\n| Integration style | Central integration hub | Distributed service-to-service integration |\n| Routing and orchestration | Built-in and centralized | Usually implemented across many services |\n| Deployment complexity | Lower for existing school systems | Higher due to many deployable units |\n| Scalability | Moderate, can bottleneck at bus | High, each service scales independently |\n| Monitoring/troubleshooting | Easier with one integration point | Harder, needs distributed tracing tools |\n| Best fit for this scenario | Strong fit | Possible but over-engineered for current size |\n\nConclusion: ESB is better for this specific school scenario because it simplifies integration and operations. Microservices are better only if the platform grows into a much larger multi-campus system with very high traffic.`,
+      q4: `The message flow starts when a student submits a reservation to the ESB. The ESB routes the request to validation, transforms the message if needed, and orchestrates checking, saving, and notifying. After processing, the ESB returns the result to the student and admin modules. This shows routing, transformation, and orchestration in one flow.`,
+      q5: `My rule-based routing uses PC status and lab availability. If the PC is under maintenance, the ESB rejects the request; if it is in-use, the ESB suggests another PC. If no PC is available, the request goes to a waitlist process. If all conditions pass, the ESB routes it to reservation saving and notification.`,
+      q6: `A real example of data transformation is converting JSON from the reservation page into XML for a legacy reporting system. Example JSON is {"studentId":"00105","lab":"530"}, while XML becomes <reservation><studentId>00105</studentId><lab>530</lab></reservation>. This is necessary because different systems may not use the same data format. The ESB performs the transformation so both systems can communicate correctly.`,
+      q7: `The workflow begins when the student submits a reservation. The ESB validates the student, checks sessions and PC availability, then saves the request and notifies the admin. After the admin approves or rejects it, the ESB updates the status and notifies the student. Finally, the transaction is forwarded to the reports module.`,
+      q8: `A failure scenario happens when the notification service is down after admin approval. The ESB can retry the message automatically and log the failure for monitoring. If the service still does not respond, the ESB can send alerts and place the message in a dead-letter queue. This prevents message loss and keeps the process reliable.`,
+      q9: `A secure ESB model uses authentication, authorization, and encryption. Students and admins must log in first, and role-based access control decides what each user can do. All communication should use HTTPS so data is encrypted while in transit. This protects reservations, PC status updates, and reports from unauthorized access.`,
+      q10: `The core ESB components are adapter, router, transformer, and broker. The adapter accepts input from apps, the router decides where the message should go, and the transformer changes the format when needed. The broker then delivers the message to the proper service or database. Together, these components make the integrated system work smoothly.`,
+      q11: `An asynchronous messaging example is when a reservation is saved first, then notifications and analytics are sent through a queue. This is better than direct communication because the student does not need to wait for every service to finish. Queues also make retries easier when one service is slow or unavailable. That makes the system faster and more reliable.`,
+      q12: `I would use Apache Camel for this project. It is useful because it supports routing, transformation, orchestration, and retry handling in one framework. I would use features like choice() for routing, transform() for format changes, and onException() for failures. This makes it a good fit for the CCS Sit-in system.`,
+      q13: `For this system, clustered deployment is the best strategy. It improves uptime, performance, and reliability more than a single standalone server. It is also easier to manage than a full cloud-native setup for a school project. This makes it suitable for a system used by many students and admins.`,
+      q14: `ESB is not the best solution for very large real-time platforms with heavy distributed traffic. In that case, the central bus may become a bottleneck and limit scalability. A better alternative is microservices with event streaming tools like Kafka. That approach supports independent scaling and faster distributed processing.`,
+      q15: `This statement means integration is not just about linking software together. It means the systems should act like one complete service from the user's point of view. In the CCS Sit-in system, one reservation should automatically update admin records, PC status, notifications, and reports. When that happens, the whole platform works as one.`
+    };
+
+    const statusMessage = document.getElementById('statusMessage');
+
+    function showStatus(message) {
+      statusMessage.textContent = message;
+      statusMessage.classList.add('show');
+      window.clearTimeout(showStatus.timeoutId);
+      showStatus.timeoutId = window.setTimeout(() => {
+        statusMessage.classList.remove('show');
+      }, 1800);
+    }
+
+    document.getElementById('fillAnswersBtn').addEventListener('click', () => {
+      Object.entries(answerData).forEach(([key, value]) => {
+        const field = document.getElementById(key);
+        if (field) {
+          field.value = value;
+        }
+      });
+      showStatus('Answers filled.');
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('activityForm').reset();
+      showStatus('Form cleared.');
+    });
+
+    document.getElementById('printBtn').addEventListener('click', () => {
+      window.print();
+    });
+  </script>
+</body>
+</html>

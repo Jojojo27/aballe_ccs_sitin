@@ -11,6 +11,22 @@ if (!isset($_SESSION['user_id'])) {
 $current_page = 'sit_history';
 $user_id = $_SESSION['user_id'];
 
+// Support feedback table schema variations across local DB copies
+$feedback_columns = $pdo->query("SHOW COLUMNS FROM feedback")->fetchAll(PDO::FETCH_COLUMN);
+$feedback_has_sit_in_id = in_array('sit_in_id', $feedback_columns, true);
+$feedback_text_column = in_array('message', $feedback_columns, true)
+    ? 'message'
+    : (in_array('comment', $feedback_columns, true) ? 'comment' : null);
+
+// Ensure community feed table exists so submitted feedback can appear in dashboard feed
+$pdo->exec("CREATE TABLE IF NOT EXISTS community_posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)");
+
 // Handle "Mark all as read" functionality
 if (isset($_POST['mark_all_read'])) {
     $stmt = $pdo->prepare("UPDATE notifications SET is_read = 1 WHERE user_id = ?");
@@ -21,19 +37,49 @@ if (isset($_POST['mark_all_read'])) {
 
 // Handle feedback submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_feedback'])) {
-    $sit_in_id = $_POST['sit_in_id'];
-    $feedback_rating = $_POST['feedback_rating'];
-    $feedback_message = $_POST['feedback_message'];
-    
-    // Check if feedback already exists
-    $stmt = $pdo->prepare("SELECT id FROM feedback WHERE sit_in_id = ? AND user_id = ?");
+    $sit_in_id = (int)($_POST['sit_in_id'] ?? 0);
+    $feedback_rating = (int)($_POST['feedback_rating'] ?? 0);
+    $feedback_message = trim($_POST['feedback_message'] ?? '');
+    $stmt = $pdo->prepare("SELECT purpose, laboratory, date FROM sit_in_history WHERE id = ? AND user_id = ?");
     $stmt->execute([$sit_in_id, $user_id]);
-    
-    if ($stmt->rowCount() > 0) {
-        $_SESSION['error'] = "Feedback already submitted for this sit-in session.";
+    $sit_details = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $community_content = null;
+    if ($sit_details) {
+        $community_content = "Feedback for Lab " . $sit_details['laboratory']
+            . " (" . $sit_details['purpose'] . ") on " . date('M d, Y', strtotime($sit_details['date']))
+            . " | Rating: " . $feedback_rating . "/5\n" . $feedback_message;
+    }
+
+    if ($feedback_text_column === null) {
+        $_SESSION['error'] = "Feedback schema is missing the message/comment column.";
+    } elseif ($feedback_has_sit_in_id) {
+        // Check if feedback already exists for this specific sit-in
+        $stmt = $pdo->prepare("SELECT id FROM feedback WHERE sit_in_id = ? AND user_id = ?");
+        $stmt->execute([$sit_in_id, $user_id]);
+
+        if ($stmt->rowCount() > 0) {
+            $_SESSION['error'] = "Feedback already submitted for this sit-in session.";
+        } else {
+            $stmt = $pdo->prepare("INSERT INTO feedback (user_id, sit_in_id, rating, {$feedback_text_column}, created_at) VALUES (?, ?, ?, ?, NOW())");
+            if ($stmt->execute([$user_id, $sit_in_id, $feedback_rating, $feedback_message])) {
+                if ($community_content !== null) {
+                    $stmt = $pdo->prepare("INSERT INTO community_posts (user_id, content) VALUES (?, ?)");
+                    $stmt->execute([$user_id, $community_content]);
+                }
+                $_SESSION['success'] = "Thank you for your feedback!";
+            } else {
+                $_SESSION['error'] = "Failed to submit feedback. Please try again.";
+            }
+        }
     } else {
-        $stmt = $pdo->prepare("INSERT INTO feedback (user_id, sit_in_id, rating, message, created_at) VALUES (?, ?, ?, ?, NOW())");
-        if ($stmt->execute([$user_id, $sit_in_id, $feedback_rating, $feedback_message])) {
+        // Older schema: feedback is not tied to a sit-in row
+        $stmt = $pdo->prepare("INSERT INTO feedback (user_id, rating, {$feedback_text_column}, created_at) VALUES (?, ?, ?, NOW())");
+        if ($stmt->execute([$user_id, $feedback_rating, $feedback_message])) {
+            if ($community_content !== null) {
+                $stmt = $pdo->prepare("INSERT INTO community_posts (user_id, content) VALUES (?, ?)");
+                $stmt->execute([$user_id, $community_content]);
+            }
             $_SESSION['success'] = "Thank you for your feedback!";
         } else {
             $_SESSION['error'] = "Failed to submit feedback. Please try again.";
@@ -119,17 +165,33 @@ if (!empty($history_data)) {
     
     // Find most used lab
     $most_used_lab = array_search(max($lab_counts), $lab_counts);
+
+    // Calculate completed sessions (with time_out)
+    $completed_sessions = array_filter($history_data, fn($r) => $r['time_in'] && $r['time_out']);
+    $completed_count = count($completed_sessions);
+    $avg_seconds = $completed_count > 0 ? intval($total_seconds / $completed_count) : 0;
+
+    // Find longest session
+    $longest_seconds = 0;
+    foreach ($completed_sessions as $r) {
+        $dur = strtotime($r['time_out']) - strtotime($r['time_in']);
+        if ($dur > $longest_seconds) $longest_seconds = $dur;
+    }
 } else {
     $most_used_lab = 'N/A';
     $total_seconds = 0;
+    $avg_seconds = 0;
+    $longest_seconds = 0;
 }
 
 // Format the total duration
 $formatted_duration = formatTotalDuration($total_seconds);
+$formatted_avg = formatTotalDuration($avg_seconds);
+$formatted_longest = formatTotalDuration($longest_seconds);
 
 // Check which sit-ins already have feedback
 $feedback_exists = [];
-if (!empty($history_data)) {
+if (!empty($history_data) && $feedback_has_sit_in_id) {
     $sit_in_ids = array_column($history_data, 'id');
     $placeholders = implode(',', array_fill(0, count($sit_in_ids), '?'));
     $stmt = $pdo->prepare("SELECT sit_in_id FROM feedback WHERE sit_in_id IN ($placeholders) AND user_id = ?");
@@ -146,6 +208,7 @@ if (!empty($history_data)) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        html { font-size: 13px; zoom: 1; }
         * {
             margin: 0;
             padding: 0;
@@ -167,206 +230,33 @@ if (!empty($history_data)) {
             top: 0;
             z-index: 1000;
         }
-
-        .nav-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0.8rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .logo-container {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .nav-avatar {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            background: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 0 5px #f39c12, 0 0 15px rgba(243,156,18,0.5);
-            transition: all 0.3s ease;
-        }
-
-        .nav-avatar:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 0 8px #f39c12, 0 0 25px rgba(243,156,18,0.7);
-        }
-
-        .nav-avatar img {
-            width: 32px;
-            height: 32px;
-            object-fit: contain;
-        }
-
-        .logo-text {
-            color: white;
-            font-weight: 600;
-            line-height: 1.2;
-        }
-
-        .logo-text strong {
-            font-size: 1.1rem;
-            display: block;
-        }
-
-        .logo-text small {
-            font-size: 0.7rem;
-            font-weight: 400;
-            opacity: 0.8;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 1.5rem;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .nav-links a {
-            text-decoration: none;
-            color: white;
-            font-weight: 500;
-            transition: 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0.5rem 0;
-        }
-
-        .nav-links a:hover {
-            color: #f39c12;
-        }
-
-        .nav-links a.active {
-            color: #f39c12;
-        }
-
-        /* NOTIFICATION */
-        .notification-icon {
-            position: relative;
-            cursor: pointer;
-            margin-left: 0.5rem;
-        }
-
-        .notification-icon i {
-            font-size: 1.2rem;
-            color: white;
-        }
-
-        .notification-badge {
-            position: absolute;
-            top: -8px;
-            right: -12px;
-            background: #e74c3c;
-            color: white;
-            font-size: 0.7rem;
-            padding: 0.2rem 0.5rem;
-            border-radius: 50px;
-            min-width: 18px;
-            text-align: center;
-        }
-
-        .notification-dropdown {
-            position: absolute;
-            top: 130%;
-            right: 0;
-            width: 350px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            z-index: 1100;
-            display: none;
-            overflow: hidden;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .notification-dropdown.show {
-            display: block;
-        }
-
-        .notification-header {
-            padding: 12px 15px;
-            background: linear-gradient(145deg, #2c3e50, #1a2634);
-            color: white;
-            font-weight: 600;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .notification-header a {
-            color: #f39c12;
-            text-decoration: none;
-            font-size: 0.75rem;
-        }
-
-        .notification-header a:hover {
-            text-decoration: underline;
-        }
-
-        .notification-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e7ff;
-            cursor: pointer;
-            transition: 0.2s;
-            text-decoration: none;
-            display: block;
-            color: #2c3e50;
-        }
-
-        .notification-item:hover {
-            background: #f8faff;
-        }
-
-        .notification-item.unread {
-            background: #fff8e7;
-        }
-
-        .notification-item.unread:hover {
-            background: #fff3cd;
-        }
-
-        .notification-title {
-            font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .notification-title i {
-            font-size: 0.8rem;
-        }
-
-        .notification-message {
-            font-size: 0.75rem;
-            color: #666;
-            margin-bottom: 4px;
-        }
-
-        .notification-time {
-            font-size: 0.65rem;
-            color: #999;
-        }
-
-        .notification-empty {
-            text-align: center;
-            padding: 30px;
-            color: #999;
-        }
+        .nav-container { max-width: 1400px; margin: 0 auto; padding: 0.8rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .logo-container { display: flex; align-items: center; gap: 15px; }
+        .nav-avatar { width: 45px; height: 45px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 0 5px #f39c12, 0 0 15px rgba(243,156,18,0.5); transition: all 0.3s ease; }
+        .nav-avatar:hover { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 0 8px #f39c12, 0 0 25px rgba(243,156,18,0.7); }
+        .nav-avatar img { width: 32px; height: 32px; object-fit: contain; }
+        .logo-text { color: white; font-weight: 600; line-height: 1.2; }
+        .logo-text strong { font-size: 1.1rem; display: block; }
+        .logo-text small { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
+        .nav-links { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+        .nav-links a { text-decoration: none; color: white; font-weight: 500; transition: 0.3s; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0; }
+        .nav-links a:hover { color: #f39c12; }
+        .nav-links a.active { color: #f39c12; }
+        .notification-icon { position: relative; cursor: pointer; margin-left: 0.5rem; }
+        .notification-icon i { font-size: 1.2rem; color: white; }
+        .notification-badge { position: absolute; top: -8px; right: -12px; background: #e74c3c; color: white; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 50px; min-width: 18px; text-align: center; }
+        .notification-dropdown { position: absolute; top: 130%; right: 0; width: 350px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 1100; display: none; overflow: hidden; max-height: 500px; overflow-y: auto; }
+        .notification-dropdown.show { display: block; }
+        .notification-header { padding: 12px 15px; background: linear-gradient(145deg, #2c3e50, #1a2634); color: white; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .notification-item { padding: 12px 15px; border-bottom: 1px solid #e0e7ff; cursor: pointer; transition: 0.2s; text-decoration: none; display: block; color: #2c3e50; }
+        .notification-item:hover { background: #f8faff; }
+        .notification-item.unread { background: #fff8e7; }
+        .notification-item.unread:hover { background: #fff3cd; }
+        .notification-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .notification-title i { font-size: 0.8rem; }
+        .notification-message { font-size: 0.75rem; color: #666; margin-bottom: 4px; }
+        .notification-time { font-size: 0.65rem; color: #999; }
+        .notification-empty { text-align: center; padding: 30px; color: #999; }
 
         /* MAIN CONTAINER */
         .main-content {
@@ -605,20 +495,21 @@ if (!empty($history_data)) {
         /* Summary Cards */
         .summary-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
         }
 
         .summary-card {
             background: white;
-            border-radius: 15px;
-            padding: 20px;
+            border-radius: 14px;
+            padding: 16px;
             display: flex;
             align-items: center;
-            gap: 15px;
+            gap: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             transition: all 0.3s;
+            min-height: 124px;
         }
 
         .summary-card:hover {
@@ -627,30 +518,33 @@ if (!empty($history_data)) {
         }
 
         .summary-icon {
-            width: 50px;
-            height: 50px;
+            width: 46px;
+            height: 46px;
             background: linear-gradient(145deg, #3498db, #2980b9);
-            border-radius: 12px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 20px;
+            font-size: 18px;
+            flex-shrink: 0;
         }
 
         .summary-details h3 {
-            font-size: 12px;
+            font-size: 0.74rem;
             color: #666;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.8px;
         }
 
         .summary-details p {
-            font-size: 20px;
+            font-size: 0.95rem;
             font-weight: 700;
             color: #2c3e50;
             margin: 0;
+            line-height: 1.35;
+            word-break: break-word;
         }
 
         /* Empty State */
@@ -918,6 +812,10 @@ if (!empty($history_data)) {
             .summary-cards {
                 grid-template-columns: 1fr;
             }
+
+            .summary-card {
+                min-height: 0;
+            }
             
             .modal-content {
                 margin: 20% auto;
@@ -931,6 +829,12 @@ if (!empty($history_data)) {
             
             .action-buttons {
                 flex-direction: column;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .summary-cards {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
     </style>
@@ -950,24 +854,17 @@ if (!empty($history_data)) {
             </div>
         </div>
         <div class="nav-links">
-            <a href="student_dashboard.php">
-                <i class="fas fa-tachometer-alt"></i> Dashboard
-            </a>
-            <a href="profile_edit.php">
-                <i class="fas fa-user-edit"></i> Edit Profile
-            </a>
-            <a href="sit_history.php" class="active">
-                <i class="fas fa-history"></i> History
-            </a>
-            <a href="sit_reservation.php">
-                <i class="fas fa-calendar-alt"></i> Reservation
-            </a>
-            <a href="student_feedback.php">
-                <i class="fas fa-star"></i> Feedback
-            </a>
-            <a href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
+            <a href="student_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+            <a href="profile_edit.php"><i class="fas fa-user-edit"></i> Edit Profile</a>
+            <div class="nav-dropdown">
+                <a href="#"><i class="fas fa-clock"></i> Sit-in <i class="fas fa-caret-down"></i></a>
+                <div class="nav-dropdown-content">
+                    <a href="sit_reservation.php"><i class="fas fa-desktop"></i> Current Sit-in</a>
+                    <a href="sit_history.php" class="active"><i class="fas fa-file-alt"></i> Sit-in Records</a>
+                </div>
+            </div>
+            <a href="student_feedback.php"><i class="fas fa-star"></i> Feedback</a>
+            <a href="logout.php" onclick="return confirm('Are you sure you want to logout?')"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
         <div class="notification-icon" id="notificationIcon">
             <i class="fas fa-bell"></i>
@@ -991,7 +888,7 @@ if (!empty($history_data)) {
                         </div>
                     <?php else: ?>
                         <?php foreach ($notifications as $notif): ?>
-                            <a href="?read_notification=<?php echo $notif['id']; ?>" 
+                            <a href="?read_notification=<?php echo $notif['id']; ?>"
                                class="notification-item <?php echo $notif['is_read'] == 0 ? 'unread' : ''; ?>">
                                 <div class="notification-title">
                                     <?php if ($notif['type'] == 'announcement'): ?>
@@ -1043,6 +940,41 @@ if (!empty($history_data)) {
                 </a>
             </div>
         <?php else: ?>
+            <!-- Summary Cards -->
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="summary-icon"><i class="fas fa-clock"></i></div>
+                    <div class="summary-details">
+                        <h3>Total Sit-in Hours</h3>
+                        <p><?php echo $formatted_duration; ?></p>
+                    </div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="summary-icon"><i class="fas fa-calendar-check"></i></div>
+                    <div class="summary-details">
+                        <h3>Number of Sessions</h3>
+                        <p><?php echo $total_visits; ?> session<?php echo $total_visits != 1 ? 's' : ''; ?></p>
+                    </div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="summary-icon" style="background:linear-gradient(145deg,#27ae60,#1e8449);"><i class="fas fa-tachometer-alt"></i></div>
+                    <div class="summary-details">
+                        <h3>Average Session Duration</h3>
+                        <p><?php echo $avg_seconds > 0 ? $formatted_avg : 'N/A'; ?></p>
+                    </div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="summary-icon" style="background:linear-gradient(145deg,#e67e22,#ca6f1e);"><i class="fas fa-trophy"></i></div>
+                    <div class="summary-details">
+                        <h3>Longest Session</h3>
+                        <p><?php echo $longest_seconds > 0 ? $formatted_longest : 'N/A'; ?></p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Table Controls -->
             <div class="table-controls">
                 <div class="entries-per-page">
@@ -1124,24 +1056,6 @@ if (!empty($history_data)) {
                 <div class="table-pagination" id="pagination"></div>
             </div>
 
-            <!-- Summary Cards with FORMATTED DURATION -->
-            <div class="summary-cards">
-                <div class="summary-card">
-                    <div class="summary-icon"><i class="fas fa-clock"></i></div>
-                    <div class="summary-details">
-                        <h3>TOTAL HOURS</h3>
-                        <p><?php echo $formatted_duration; ?></p>
-                    </div>
-                </div>
-                
-                <div class="summary-card">
-                    <div class="summary-icon"><i class="fas fa-calendar-check"></i></div>
-                    <div class="summary-details">
-                        <h3>TOTAL VISITS</h3>
-                        <p><?php echo $total_visits; ?> session<?php echo $total_visits != 1 ? 's' : ''; ?></p>
-                    </div>
-                </div>
-            </div>
         <?php endif; ?>
     </div>
 </main>
@@ -1368,13 +1282,13 @@ if (!empty($history_data)) {
     // Rating stars functionality
     document.querySelectorAll('.rating-stars i').forEach(star => {
         star.addEventListener('click', function() {
-            const rating = this.getAttribute('data-rating');
+            const rating = parseInt(this.getAttribute('data-rating'));
             document.getElementById('feedback_rating').value = rating;
             
             document.querySelectorAll('.rating-stars i').forEach(s => {
                 const starRating = parseInt(s.getAttribute('data-rating'));
                 if (starRating <= rating) {
-                    s.className = 'fas fa-star';
+                    s.className = 'fas fa-star active';
                 } else {
                     s.className = 'far fa-star';
                 }

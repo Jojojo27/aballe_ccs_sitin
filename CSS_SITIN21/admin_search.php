@@ -32,43 +32,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['student_id'])) {
     <title>Search Student - Admin</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Poppins', sans-serif; background: #f0f2f5; }
-        
-        .navbar {
-            background: linear-gradient(145deg, #2c3e50, #1a2634);
-            color: white;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+    <link rel="stylesheet" href="style.css">
+        .dark-mode-toggle {
             position: fixed;
-            width: 100%;
-            top: 0;
-            z-index: 1000;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        .navbar-logo { font-size: 1.3rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; }
-        .navbar-links { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-        .navbar-links a {
+            bottom: 1rem;
+            right: 1rem;
+            z-index: 10001;
+            background: #3498db;
             color: white;
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            transition: 0.3s;
-            font-size: 0.9rem;
-            display: inline-flex;
+            border: none;
+            border-radius: 50px;
+            padding: 0.5rem 1.1rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+            display: flex;
             align-items: center;
             gap: 0.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            transition: 0.2s;
         }
-        .navbar-links a:hover { background: #34495e; }
-        .navbar-links a.active { background: #3498db; }
-        .logout-btn { background: #e74c3c; }
-        .logout-btn:hover { background: #c0392b !important; }
+        .dark-mode-toggle:hover { background: #2980b9; }
+        .dark-mode-toggle i { font-size: 0.9rem; }
+        body.dark-mode { background: #1a2332 !important; }
+        body.dark-mode .main-content { background: #1e2a38; color: #dde3ea; }
+        body.dark-mode table { background: #253040 !important; color: #dde3ea !important; }
+        body.dark-mode th { background: #1a2634 !important; color: #dde3ea !important; }
+        body.dark-mode td { border-color: #2c3e50 !important; color: #dde3ea !important; }
         
-        .main-content { margin-top: 80px; padding: 2rem; max-width: 900px; margin-left: auto; margin-right: auto; }
+        .main-content { margin-left: 220px; padding: 2rem; min-height: 100vh; }
         
         /* Search Section */
         .search-section {
@@ -361,33 +352,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['student_id'])) {
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <div class="navbar-logo">
-            <i class="fas fa-laptop-code"></i> College of Computer Studies Admin
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" style="width: 250px; background: #111827; color: #e5e7eb; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;">
+        <div>
+            <div class="sidebar-logo" style="display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.2rem; margin-bottom: 2.5rem; padding-left: 0.5rem; padding-top: 1.5rem;">
+                <i class="fas fa-laptop-code"></i> <span>CCS Admin</span>
+            </div>
+            <nav class="sidebar-nav" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <a href="admin_dashboard.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? 'active' : ''; ?>" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: <?php echo basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? '#fff' : '#cbd5e1'; ?>; font-weight: 500; <?php echo basename($_SERVER['PHP_SELF']) == 'admin_dashboard.php' ? 'background: #3b82f6;' : ''; ?> transition: all 0.2s;"><i class="fas fa-home"></i> Home</a>
+                <a href="admin_search.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'admin_search.php' ? 'active' : ''; ?>" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: <?php echo basename($_SERVER['PHP_SELF']) == 'admin_search.php' ? '#fff' : '#cbd5e1'; ?>; font-weight: 500; <?php echo basename($_SERVER['PHP_SELF']) == 'admin_search.php' ? 'background: #3b82f6;' : ''; ?> transition: all 0.2s;"><i class="fas fa-search"></i> Search</a>
+                <a href="admin_students.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-users"></i> Students</a>
+                <a href="admin_sitins.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-clock"></i> Sit-in</a>
+                <a href="admin_records.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-list"></i> View Records</a>
+                <a href="admin_reports.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-chart-line"></i> Report & Analytics</a>
+                <a href="admin_feedback.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-comment-dots"></i> Feedback</a>
+                <a href="admin_reservations.php" style="display: flex; align-items: center; gap: 12px; padding: 0.75rem 1rem; border-radius: 14px; text-decoration: none; color: #cbd5e1; font-weight: 500; transition: all 0.2s;"><i class="fas fa-calendar-alt"></i> Reservation</a>
+            </nav>
         </div>
-        <div class="navbar-links">
-            <a href="admin_dashboard.php"><i class="fas fa-home"></i> Home</a>
-            <a href="admin_search.php" class="active"><i class="fas fa-search"></i> Search</a>
-            <a href="admin_students.php"><i class="fas fa-users"></i> Students</a>
-            <a href="admin_sitins.php"><i class="fas fa-clock"></i> Sit-in</a>
-            <a href="admin_records.php"><i class="fas fa-list"></i> View Sit-in Records</a>
-            <a href="admin_reports.php"><i class="fas fa-chart-line"></i> Sit-in Reports</a>
-            <a href="admin_feedback.php"><i class="fas fa-star"></i> Feedback Reports</a>
-            <a href="admin_reservations.php"><i class="fas fa-calendar-alt"></i> Reservation</a>
-            <a href="logout.php" class="logout-btn"><i class="fas fa-sign-out-alt"></i> Log out</a>
+        <div style="padding-bottom: 2rem;">
+            <a href="logout.php" style="display: flex; align-items: center; gap: 12px; background: #dc2626; color: #fff; text-decoration: none; padding: 0.75rem 1rem; border-radius: 14px; font-weight: 600; justify-content: center;"><i class="fas fa-sign-out-alt"></i> Log out</a>
         </div>
-    </nav>
+    </aside>
 
-    <main class="main-content">
+    <main class="main-content" style="margin-left: 250px;">
         <div class="search-section">
             <h1>
                 <i class="fas fa-search"></i> 
                 Search Student
             </h1>
             <p>Enter the student ID number to view their complete profile</p>
-            <form method="POST" class="search-box">
-                <input type="text" name="student_id" placeholder="Enter Student ID Number" value="<?php echo htmlspecialchars($search_id); ?>" required>
-                <button type="submit">
+            <form method="POST" class="search-box" style="display: flex; gap: 1rem; max-width: 500px; margin: 0 auto; flex-wrap: wrap;">
+                <input type="text" name="student_id" placeholder="Enter Student ID Number" value="<?php echo htmlspecialchars($search_id); ?>" required style="flex: 1; padding: 0.9rem 1rem; border: 2px solid #e0e7ff; border-radius: 12px; font-family: 'Poppins', sans-serif; font-size: 0.95rem; transition: all 0.3s;">
+                <button type="submit" style="padding: 0.9rem 2rem; background: linear-gradient(145deg, #3498db, #2980b9); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; transition: all 0.3s; display: flex; align-items: center; gap: 0.5rem;">
                     <i class="fas fa-search"></i> Search
                 </button>
             </form>
@@ -462,5 +458,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['student_id'])) {
         </div>
         <?php endif; ?>
     </main>
+    <button class="dark-mode-toggle" onclick="toggleTheme()"><i class="fas fa-moon" id="theme-icon"></i> <span id="theme-label">Dark</span></button>
+    <script>
+    function toggleTheme() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        document.getElementById('theme-label').textContent = isDark ? 'Light' : 'Dark';
+        document.getElementById('theme-icon').className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+    if (localStorage.getItem('theme') === 'dark') {
+        document.body.classList.add('dark-mode');
+        document.getElementById('theme-label').textContent = 'Light';
+        document.getElementById('theme-icon').className = 'fas fa-sun';
+    }
+    </script>
 </body>
 </html>

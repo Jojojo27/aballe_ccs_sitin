@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once 'config.php';
 
 // Redirect if already logged in as admin
 if (isset($_SESSION['admin_id'])) {
@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        html { font-size: 13px; zoom: 0.80; }
         body {
             background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
             font-family: 'Poppins', sans-serif;

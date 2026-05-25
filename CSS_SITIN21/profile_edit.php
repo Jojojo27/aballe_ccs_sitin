@@ -93,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <style>
+    html { font-size: 13px; zoom: 1; }
 * {
     margin: 0;
     padding: 0;
@@ -114,207 +115,35 @@ body {
     top: 0;
     z-index: 1000;
 }
-
-.nav-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0.8rem 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
-.logo-container {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-/* Avatar Circle with Glow */
-.nav-avatar {
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    background: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 0 5px #f39c12, 0 0 15px rgba(243,156,18,0.5);
-    transition: all 0.3s ease;
-}
-
-.nav-avatar:hover {
-    transform: scale(1.05);
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 0 8px #f39c12, 0 0 25px rgba(243,156,18,0.7);
-}
-
-.nav-avatar img {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-}
-
-.logo-text {
-    color: white;
-    font-weight: 600;
-    line-height: 1.2;
-}
-
-.logo-text strong {
-    font-size: 1.1rem;
-    display: block;
-}
-
-.logo-text small {
-    font-size: 0.7rem;
-    font-weight: 400;
-    opacity: 0.8;
-}
-
-.nav-links {
-    display: flex;
-    gap: 1.5rem;
-    align-items: center;
-    flex-wrap: wrap;
-}
-
-.nav-links a {
-    text-decoration: none;
-    color: white;
-    font-weight: 500;
-    transition: 0.3s;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0.5rem 0;
-}
-
-.nav-links a:hover {
-    color: #f39c12;
-}
-
-.nav-links a.active {
-    color: #f39c12;
-}
-
-/* NOTIFICATION */
-.notification-icon {
-    position: relative;
-    cursor: pointer;
-    margin-left: 0.5rem;
-}
-
-.notification-icon i {
-    font-size: 1.2rem;
-    color: white;
-}
-
-.notification-badge {
-    position: absolute;
-    top: -8px;
-    right: -12px;
-    background: #e74c3c;
-    color: white;
-    font-size: 0.7rem;
-    padding: 0.2rem 0.5rem;
-    border-radius: 50px;
-    min-width: 18px;
-    text-align: center;
-}
-
-.notification-dropdown {
-    position: absolute;
-    top: 130%;
-    right: 0;
-    width: 350px;
-    background: white;
-    border-radius: 12px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    z-index: 1100;
-    display: none;
-    overflow: hidden;
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.notification-dropdown.show {
-    display: block;
-}
-
-.notification-header {
-    padding: 12px 15px;
-    background: linear-gradient(145deg, #2c3e50, #1a2634);
-    color: white;
-    font-weight: 600;
-    border-bottom: 1px solid rgba(255,255,255,0.1);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.notification-header a {
-    color: #f39c12;
-    text-decoration: none;
-    font-size: 0.75rem;
-}
-
-.notification-header a:hover {
-    text-decoration: underline;
-}
-
-.notification-item {
-    padding: 12px 15px;
-    border-bottom: 1px solid #e0e7ff;
-    cursor: pointer;
-    transition: 0.2s;
-    text-decoration: none;
-    display: block;
-    color: #2c3e50;
-}
-
-.notification-item:hover {
-    background: #f8faff;
-}
-
-.notification-item.unread {
-    background: #fff8e7;
-}
-
-.notification-item.unread:hover {
-    background: #fff3cd;
-}
-
-.notification-title {
-    font-weight: 600;
-    font-size: 0.85rem;
-    margin-bottom: 4px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.notification-title i {
-    font-size: 0.8rem;
-}
-
-.notification-message {
-    font-size: 0.75rem;
-    color: #666;
-    margin-bottom: 4px;
-}
-
-.notification-time {
-    font-size: 0.65rem;
-    color: #999;
-}
-
-.notification-empty {
-    text-align: center;
-    padding: 30px;
-    color: #999;
-}
+.nav-container { max-width: 1400px; margin: 0 auto; padding: 0.8rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.logo-container { display: flex; align-items: center; gap: 15px; }
+.nav-avatar { width: 45px; height: 45px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 0 5px #f39c12, 0 0 15px rgba(243,156,18,0.5); transition: all 0.3s ease; }
+.nav-avatar:hover { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 0 8px #f39c12, 0 0 25px rgba(243,156,18,0.7); }
+.nav-avatar img { width: 32px; height: 32px; object-fit: contain; }
+.logo-text { color: white; font-weight: 600; line-height: 1.2; }
+.logo-text strong { font-size: 1.1rem; display: block; }
+.logo-text small { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
+.nav-links { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+.nav-links a { text-decoration: none; color: white; font-weight: 500; transition: 0.3s; display: flex; align-items: center; gap: 8px; padding: 0.5rem 0; }
+.nav-links a:hover { color: #f39c12; }
+.nav-links a.active { color: #f39c12; }
+.notification-icon { position: relative; cursor: pointer; margin-left: 0.5rem; }
+.notification-icon i { font-size: 1.2rem; color: white; }
+.notification-badge { position: absolute; top: -8px; right: -12px; background: #e74c3c; color: white; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 50px; min-width: 18px; text-align: center; }
+.notification-dropdown { position: absolute; top: 130%; right: 0; width: 350px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 1100; display: none; overflow: hidden; max-height: 500px; overflow-y: auto; }
+.notification-dropdown.show { display: block; }
+.notification-header { padding: 12px 15px; background: linear-gradient(145deg, #2c3e50, #1a2634); color: white; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center; }
+.notification-header a { color: #f39c12; text-decoration: none; font-size: 0.75rem; }
+.notification-header a:hover { text-decoration: underline; }
+.notification-item { padding: 12px 15px; border-bottom: 1px solid #e0e7ff; cursor: pointer; transition: 0.2s; text-decoration: none; display: block; color: #2c3e50; }
+.notification-item:hover { background: #f8faff; }
+.notification-item.unread { background: #fff8e7; }
+.notification-item.unread:hover { background: #fff3cd; }
+.notification-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.notification-title i { font-size: 0.8rem; }
+.notification-message { font-size: 0.75rem; color: #666; margin-bottom: 4px; }
+.notification-time { font-size: 0.65rem; color: #999; }
+.notification-empty { text-align: center; padding: 30px; color: #999; }
 
 /* MAIN CONTAINER */
 .container {
@@ -574,24 +403,17 @@ input:disabled {
             </div>
         </div>
         <div class="nav-links">
-            <a href="student_dashboard.php">
-                <i class="fas fa-tachometer-alt"></i> Dashboard
-            </a>
-            <a href="profile_edit.php" class="active">
-                <i class="fas fa-user-edit"></i> Edit Profile
-            </a>
-            <a href="sit_history.php">
-                <i class="fas fa-history"></i> History
-            </a>
-            <a href="sit_reservation.php">
-                <i class="fas fa-calendar-alt"></i> Reservation
-            </a>
-            <a href="student_feedback.php">
-                <i class="fas fa-star"></i> Feedback
-            </a>
-            <a href="logout.php" onclick="return confirm('Are you sure you want to logout?')">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </a>
+            <a href="student_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+            <a href="profile_edit.php" class="active"><i class="fas fa-user-edit"></i> Edit Profile</a>
+            <div class="nav-dropdown">
+                <a href="#"><i class="fas fa-clock"></i> Sit-in <i class="fas fa-caret-down"></i></a>
+                <div class="nav-dropdown-content">
+                    <a href="sit_reservation.php"><i class="fas fa-desktop"></i> Current Sit-in</a>
+                    <a href="sit_history.php"><i class="fas fa-file-alt"></i> Sit-in Records</a>
+                </div>
+            </div>
+            <a href="student_feedback.php"><i class="fas fa-star"></i> Feedback</a>
+            <a href="logout.php" onclick="return confirm('Are you sure you want to logout?')"><i class="fas fa-sign-out-alt"></i> Logout</a>
         </div>
         <div class="notification-icon" id="notificationIcon">
             <i class="fas fa-bell"></i>
@@ -615,7 +437,7 @@ input:disabled {
                         </div>
                     <?php else: ?>
                         <?php foreach ($notifications as $notif): ?>
-                            <a href="?read_notification=<?php echo $notif['id']; ?>" 
+                            <a href="?read_notification=<?php echo $notif['id']; ?>"
                                class="notification-item <?php echo $notif['is_read'] == 0 ? 'unread' : ''; ?>">
                                 <div class="notification-title">
                                     <?php if ($notif['type'] == 'announcement'): ?>

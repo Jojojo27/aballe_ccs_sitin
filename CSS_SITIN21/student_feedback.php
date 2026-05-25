@@ -11,6 +11,22 @@ $message = '';
 $error = '';
 
 // Get unread notifications count
+
+// Support feedback table schema variations across local DB copies
+$feedback_columns = $pdo->query("SHOW COLUMNS FROM feedback")->fetchAll(PDO::FETCH_COLUMN);
+$feedback_has_sit_in_id = in_array('sit_in_id', $feedback_columns, true);
+$feedback_text_column = in_array('message', $feedback_columns, true)
+    ? 'message'
+    : (in_array('comment', $feedback_columns, true) ? 'comment' : null);
+
+// Ensure community feed table exists so feedback can be mirrored there
+$pdo->exec("CREATE TABLE IF NOT EXISTS community_posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)");
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0");
 $stmt->execute([$user_id]);
 $unread_count = $stmt->fetchColumn();
@@ -35,15 +51,25 @@ $stmt->execute([$user_id]);
 $user = $stmt->fetch();
 
 // Get user's completed sit-ins that don't have feedback yet
-$stmt = $pdo->prepare("
-    SELECT s.*, 
-           CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END as has_feedback
-    FROM sit_in_history s 
-    LEFT JOIN feedback f ON s.id = f.sit_in_id AND f.user_id = ?
-    WHERE s.user_id = ? AND s.status = 'Completed'
-    ORDER BY s.date DESC, s.time_in DESC
-");
-$stmt->execute([$user_id, $user_id]);
+if ($feedback_has_sit_in_id) {
+    $stmt = $pdo->prepare("
+        SELECT s.*, 
+               CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END as has_feedback
+        FROM sit_in_history s 
+        LEFT JOIN feedback f ON s.id = f.sit_in_id AND f.user_id = ?
+        WHERE s.user_id = ? AND s.status = 'Completed'
+        ORDER BY s.date DESC, s.time_in DESC
+    ");
+    $stmt->execute([$user_id, $user_id]);
+} else {
+    $stmt = $pdo->prepare("
+        SELECT s.*, 0 as has_feedback
+        FROM sit_in_history s
+        WHERE s.user_id = ? AND s.status = 'Completed'
+        ORDER BY s.date DESC, s.time_in DESC
+    ");
+    $stmt->execute([$user_id]);
+}
 $completed_sitins = $stmt->fetchAll();
 
 // Handle feedback submission
@@ -52,33 +78,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_feedback'])) {
     $rating = (int)$_POST['rating'];
     $message_text = trim($_POST['message']);
     
-    $stmt = $pdo->prepare("SELECT id FROM sit_in_history WHERE id = ? AND user_id = ? AND status = 'Completed'");
+    $stmt = $pdo->prepare("SELECT id, purpose, laboratory, date FROM sit_in_history WHERE id = ? AND user_id = ? AND status = 'Completed'");
     $stmt->execute([$sit_in_id, $user_id]);
+    $sit_details = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    if ($stmt->rowCount() == 0) {
+    if (!$sit_details) {
         $error = "Invalid sit-in record selected.";
+    } elseif ($feedback_text_column === null) {
+        $error = "Feedback schema is missing the message/comment column.";
     } elseif ($rating < 1 || $rating > 5) {
         $error = "Please select a rating (1-5 stars)";
     } elseif (empty($message_text)) {
         $error = "Please enter your feedback message";
     } else {
         try {
-            $stmt = $pdo->prepare("SELECT id FROM feedback WHERE sit_in_id = ? AND user_id = ?");
-            $stmt->execute([$sit_in_id, $user_id]);
-            
-            if ($stmt->rowCount() > 0) {
-                $error = "You have already submitted feedback for this sit-in session.";
-            } else {
-                $stmt = $pdo->prepare("INSERT INTO feedback (user_id, sit_in_id, rating, message, created_at) VALUES (?, ?, ?, ?, NOW())");
-                $result = $stmt->execute([$user_id, $sit_in_id, $rating, $message_text]);
-                
-                if ($result) {
-                    $message = "Thank you for your feedback!";
-                    header("Location: student_feedback.php?success=1");
-                    exit();
+            $result = false;
+            if ($feedback_has_sit_in_id) {
+                $stmt = $pdo->prepare("SELECT id FROM feedback WHERE sit_in_id = ? AND user_id = ?");
+                $stmt->execute([$sit_in_id, $user_id]);
+
+                if ($stmt->rowCount() > 0) {
+                    $error = "You have already submitted feedback for this sit-in session.";
                 } else {
-                    $error = "Failed to submit feedback. Please try again.";
+                    $stmt = $pdo->prepare("INSERT INTO feedback (user_id, sit_in_id, rating, {$feedback_text_column}, created_at) VALUES (?, ?, ?, ?, NOW())");
+                    $result = $stmt->execute([$user_id, $sit_in_id, $rating, $message_text]);
                 }
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO feedback (user_id, rating, {$feedback_text_column}, created_at) VALUES (?, ?, ?, NOW())");
+                $result = $stmt->execute([$user_id, $rating, $message_text]);
+            }
+
+            if (!$error && $result) {
+                $community_content = "Feedback for Lab " . $sit_details['laboratory']
+                    . " (" . $sit_details['purpose'] . ") on " . date('M d, Y', strtotime($sit_details['date']))
+                    . " | Rating: " . $rating . "/5\n" . $message_text;
+                $stmt = $pdo->prepare("INSERT INTO community_posts (user_id, content) VALUES (?, ?)");
+                $stmt->execute([$user_id, $community_content]);
+
+                $message = "Thank you for your feedback!";
+                header("Location: student_feedback.php?success=1");
+                exit();
+            } elseif (!$error) {
+                $error = "Failed to submit feedback. Please try again.";
             }
         } catch(PDOException $e) {
             $error = "Database error: " . $e->getMessage();
@@ -87,15 +128,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['submit_feedback'])) {
 }
 
 // Get user's feedback with sit-in details
-$stmt = $pdo->prepare("
-    SELECT f.*, s.purpose, s.laboratory, s.date, s.time_in, s.time_out
-    FROM feedback f
-    JOIN sit_in_history s ON f.sit_in_id = s.id
-    WHERE f.user_id = ?
-    ORDER BY f.created_at DESC
-");
-$stmt->execute([$user_id]);
-$user_feedback = $stmt->fetchAll();
+if ($feedback_text_column === null) {
+    $user_feedback = [];
+} elseif ($feedback_has_sit_in_id) {
+    $stmt = $pdo->prepare("
+        SELECT f.*, f.{$feedback_text_column} AS feedback_text, s.purpose, s.laboratory, s.date, s.time_in, s.time_out
+        FROM feedback f
+        JOIN sit_in_history s ON f.sit_in_id = s.id
+        WHERE f.user_id = ?
+        ORDER BY f.created_at DESC
+    ");
+    $stmt->execute([$user_id]);
+    $user_feedback = $stmt->fetchAll();
+} else {
+    $stmt = $pdo->prepare("
+        SELECT f.*, f.{$feedback_text_column} AS feedback_text, NULL AS purpose, NULL AS laboratory, NULL AS date, NULL AS time_in, NULL AS time_out
+        FROM feedback f
+        WHERE f.user_id = ?
+        ORDER BY f.created_at DESC
+    ");
+    $stmt->execute([$user_id]);
+    $user_feedback = $stmt->fetchAll();
+}
 
 if (isset($_GET['success']) && $_GET['success'] == 1) {
     $message = "Thank you for your feedback!";
@@ -110,6 +164,7 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
+        html { font-size: 13px; zoom: 1; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Poppins', sans-serif; background: linear-gradient(2deg,rgba(203, 164, 237, 1) 0%, rgba(177, 204, 224, 1) 56%, rgba(4, 4, 59, 1) 100%); }
         
@@ -121,196 +176,33 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
             top: 0;
             z-index: 1000;
         }
-        
-        .nav-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0.8rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        
-        .logo-container {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .nav-avatar {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            background: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 0 5px #f39c12, 0 0 15px rgba(243,156,18,0.5);
-            transition: all 0.3s ease;
-        }
-        
-        .nav-avatar:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 0 8px #f39c12, 0 0 25px rgba(243,156,18,0.7);
-        }
-        
-        .nav-avatar img {
-            width: 32px;
-            height: 32px;
-            object-fit: contain;
-        }
-        
-        .logo-text {
-            color: white;
-            font-weight: 600;
-            line-height: 1.2;
-        }
-        
-        .logo-text strong {
-            font-size: 1.1rem;
-            display: block;
-        }
-        
-        .logo-text small {
-            font-size: 0.7rem;
-            font-weight: 400;
-            opacity: 0.8;
-        }
-        
-        .nav-links {
-            display: flex;
-            gap: 1.5rem;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        .nav-links a {
-            text-decoration: none;
-            color: white;
-            font-weight: 500;
-            transition: 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 0.5rem 0.8rem;
-            border-radius: 8px;
-        }
-        
-        .nav-links a:hover {
-            color: #f39c12;
-            background: rgba(255,255,255,0.1);
-        }
-        
-        .nav-links a.active {
-            color: #f39c12;
-            background: rgba(255,255,255,0.1);
-        }
-        
-        .notification-icon {
-            position: relative;
-            cursor: pointer;
-            margin-left: 0.5rem;
-            display: flex;
-            align-items: center;
-        }
-        
-        .notification-icon i {
-            font-size: 1.2rem;
-            color: white;
-        }
-        
-        .notification-badge {
-            position: absolute;
-            top: -8px;
-            right: -8px;
-            background: #e74c3c;
-            color: white;
-            font-size: 0.7rem;
-            padding: 0.2rem 0.5rem;
-            border-radius: 50px;
-            min-width: 18px;
-            text-align: center;
-        }
-        
-        .notification-dropdown {
-            position: absolute;
-            top: 130%;
-            right: 0;
-            width: 350px;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            z-index: 1100;
-            display: none;
-            overflow: hidden;
-            max-height: 500px;
-            overflow-y: auto;
-        }
-        
-        .notification-dropdown.show {
-            display: block;
-        }
-        
-        .notification-header {
-            padding: 12px 15px;
-            background: linear-gradient(145deg, #2c3e50, #1a2634);
-            color: white;
-            font-weight: 600;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        
-        .notification-item {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e0e7ff;
-            cursor: pointer;
-            transition: 0.2s;
-            text-decoration: none;
-            display: block;
-            color: #2c3e50;
-        }
-        
-        .notification-item:hover {
-            background: #f8faff;
-        }
-        
-        .notification-item.unread {
-            background: #fff8e7;
-        }
-        
-        .notification-title {
-            font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .notification-message {
-            font-size: 0.75rem;
-            color: #666;
-            margin-bottom: 4px;
-        }
-        
-        .notification-time {
-            font-size: 0.65rem;
-            color: #999;
-        }
-        
-        .notification-empty {
-            text-align: center;
-            padding: 30px;
-            color: #999;
-        }
-        
-        .notification-footer {
-            padding: 10px;
-            text-align: center;
-            background: #f8f9fa;
-            border-top: 1px solid #e0e7ff;
-        }
+        .nav-container { max-width: 1400px; margin: 0 auto; padding: 0.8rem 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .logo-container { display: flex; align-items: center; gap: 15px; }
+        .nav-avatar { width: 45px; height: 45px; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px rgba(255,255,255,0.3), 0 0 0 5px #f39c12, 0 0 15px rgba(243,156,18,0.5); transition: all 0.3s ease; }
+        .nav-avatar:hover { transform: scale(1.05); box-shadow: 0 0 0 2px rgba(255,255,255,0.4), 0 0 0 8px #f39c12, 0 0 25px rgba(243,156,18,0.7); }
+        .nav-avatar img { width: 32px; height: 32px; object-fit: contain; }
+        .logo-text { color: white; font-weight: 600; line-height: 1.2; }
+        .logo-text strong { font-size: 1.1rem; display: block; }
+        .logo-text small { font-size: 0.7rem; font-weight: 400; opacity: 0.8; }
+        .nav-links { display: flex; gap: 1.5rem; align-items: center; flex-wrap: wrap; }
+        .nav-links a { text-decoration: none; color: white; font-weight: 500; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; padding: 0.5rem 0.8rem; border-radius: 8px; }
+        .nav-links a:hover { color: #f39c12; background: rgba(255,255,255,0.1); }
+        .nav-links a.active { color: #f39c12; background: rgba(255,255,255,0.1); }
+        .notification-icon { position: relative; cursor: pointer; margin-left: 0.5rem; display: flex; align-items: center; }
+        .notification-icon i { font-size: 1.2rem; color: white; }
+        .notification-badge { position: absolute; top: -8px; right: -8px; background: #e74c3c; color: white; font-size: 0.7rem; padding: 0.2rem 0.5rem; border-radius: 50px; min-width: 18px; text-align: center; }
+        .notification-dropdown { position: absolute; top: 130%; right: 0; width: 350px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); z-index: 1100; display: none; overflow: hidden; max-height: 500px; overflow-y: auto; }
+        .notification-dropdown.show { display: block; }
+        .notification-header { padding: 12px 15px; background: linear-gradient(145deg, #2c3e50, #1a2634); color: white; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .notification-item { padding: 12px 15px; border-bottom: 1px solid #e0e7ff; cursor: pointer; transition: 0.2s; text-decoration: none; display: block; color: #2c3e50; }
+        .notification-item:hover { background: #f8faff; }
+        .notification-item.unread { background: #fff8e7; }
+        .notification-title { font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .notification-message { font-size: 0.75rem; color: #666; margin-bottom: 4px; }
+        .notification-time { font-size: 0.65rem; color: #999; }
+        .notification-empty { text-align: center; padding: 30px; color: #999; }
+        .notification-footer { padding: 10px; text-align: center; background: #f8f9fa; border-top: 1px solid #e0e7ff; }
+        .notification-footer a { color: #3498db; text-decoration: none; font-size: 0.75rem; }
         
         .main-content {
             margin-top: 120px;
@@ -511,19 +403,19 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
     <nav class="navbar">
         <div class="nav-container">
             <div class="logo-container">
-                <div class="nav-avatar">
-                    <img src="ccsmainlogo.png" alt="CCS Logo">
-                </div>
-                <div class="logo-text">
-                    <strong>CCS</strong>
-                    <small>Sit-in Monitoring</small>
-                </div>
+                <div class="nav-avatar"><img src="ccsmainlogo.png" alt="CCS Logo"></div>
+                <div class="logo-text"><strong>CCS</strong><small>Sit-in Monitoring</small></div>
             </div>
             <div class="nav-links">
                 <a href="student_dashboard.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
                 <a href="profile_edit.php"><i class="fas fa-user-edit"></i> Edit Profile</a>
-                <a href="sit_history.php"><i class="fas fa-history"></i> History</a>
-                <a href="sit_reservation.php"><i class="fas fa-calendar-alt"></i> Reservation</a>
+                <div class="nav-dropdown">
+                    <a href="#"><i class="fas fa-clock"></i> Sit-in <i class="fas fa-caret-down"></i></a>
+                    <div class="nav-dropdown-content">
+                        <a href="sit_reservation.php"><i class="fas fa-desktop"></i> Current Sit-in</a>
+                        <a href="sit_history.php"><i class="fas fa-file-alt"></i> Sit-in Records</a>
+                    </div>
+                </div>
                 <a href="student_feedback.php" class="active"><i class="fas fa-star"></i> Feedback</a>
                 <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </div>
@@ -544,7 +436,7 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                             </div>
                         <?php else: ?>
                             <?php foreach ($notifications as $notif): ?>
-                                <a href="?read_notification=<?php echo $notif['id']; ?>" 
+                                <a href="?read_notification=<?php echo $notif['id']; ?>"
                                    class="notification-item <?php echo $notif['is_read'] == 0 ? 'unread' : ''; ?>">
                                     <div class="notification-title">
                                         <?php if ($notif['type'] == 'announcement'): ?>
@@ -663,7 +555,12 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                         <?php foreach ($user_feedback as $fb): ?>
                             <div class="feedback-item">
                                 <div class="feedback-session">
-                                    <i class="fas fa-flask"></i> <?php echo htmlspecialchars($fb['purpose']); ?> | Lab <?php echo $fb['laboratory']; ?> | <?php echo date('M d, Y', strtotime($fb['date'])); ?>
+                                    <i class="fas fa-flask"></i>
+                                    <?php if (!empty($fb['purpose']) && !empty($fb['laboratory']) && !empty($fb['date'])): ?>
+                                        <?php echo htmlspecialchars($fb['purpose']); ?> | Lab <?php echo htmlspecialchars($fb['laboratory']); ?> | <?php echo date('M d, Y', strtotime($fb['date'])); ?>
+                                    <?php else: ?>
+                                        General Feedback Record
+                                    <?php endif; ?>
                                 </div>
                                 <div class="feedback-rating">
                                     <?php for ($i = 1; $i <= 5; $i++): ?>
@@ -674,7 +571,7 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                                         <?php endif; ?>
                                     <?php endfor; ?>
                                 </div>
-                                <div class="feedback-message"><?php echo nl2br(htmlspecialchars($fb['message'])); ?></div>
+                                <div class="feedback-message"><?php echo nl2br(htmlspecialchars($fb['feedback_text'] ?? '')); ?></div>
                                 <div class="feedback-date"><i class="fas fa-calendar-alt"></i> Submitted on <?php echo date('M d, Y g:i A', strtotime($fb['created_at'])); ?></div>
                             </div>
                         <?php endforeach; ?>

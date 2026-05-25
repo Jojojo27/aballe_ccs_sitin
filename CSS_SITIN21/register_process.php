@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <link href="https://fonts.googleapis.com/css2?family=Poppins&display=swap" rel="stylesheet">
 
 <style>
+    html { font-size: 13px; zoom: 0.80; }
 body {
     font-family: 'Poppins';
     margin: 0;
